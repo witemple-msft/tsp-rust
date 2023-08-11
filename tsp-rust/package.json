@@ -1,0 +1,21 @@
+{
+  "name": "tsp-rust",
+  "version": "1.0.0",
+  "description": "",
+  "type": "module",
+  "main": "dist/index.js",
+  "tspMain": "lib/main.tsp",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "typescript": "^5.1.6"
+  },
+  "dependencies": {
+    "@typespec/compiler": "^0.46.0",
+    "@typespec/http": "^0.46.0"
+  }
+}
