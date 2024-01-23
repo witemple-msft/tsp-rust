@@ -1,11 +1,12 @@
-import { parseCase } from "./case.js";
-import { RustContext } from "./ctx.js";
-import { vendoredModulePath } from "./vendored.js";
+import { parseCase } from "../case.js";
+import { RustContext } from "../ctx.js";
+import { vendoredModulePath } from "../vendored.js";
 
 export interface AuthCode {
   fields: string[];
   config_lines: string[];
   declarations: string[];
+  headers: [string, string][];
 }
 
 export function generateAuth(ctx: RustContext): AuthCode {
@@ -15,6 +16,7 @@ export function generateAuth(ctx: RustContext): AuthCode {
       config_lines: [],
       fields: [],
       declarations: [],
+      headers: [],
     };
   }
 
@@ -40,21 +42,37 @@ export function generateAuth(ctx: RustContext): AuthCode {
           : scheme.id;
       const idCase = parseCase(id);
       const structName = idCase.pascalCase;
+
+      if (scheme.in !== "header") {
+        throw new Error("TODO: only header auth is supported");
+      }
+
+      const headerValuePath = vendoredModulePath(
+        "reqwest",
+        "header",
+        "HeaderValue"
+      );
+
       return {
         config_lines: [`pub api_key: auth::${structName},`],
         fields: ["api_key"],
+        headers: [[scheme.name, `ctx.api_key.as_header_value()`]],
         declarations: [
           "pub mod auth {",
           `  pub struct ${structName} {`,
-          `    key: ${vendoredModulePath("sec", "Secret")},`,
+          `    key: String,`,
           "  }",
           "  ",
           `  impl ${structName} {`,
-          "    pub fn new(key: &str) -> Self {",
+          "    pub fn new(key: impl AsRef<str>) -> Self {",
           "      Self {",
           // prettier-ignore
-          `        key: ${vendoredModulePath("sec", "Secret")}::new(key.to_string())`,
+          `        key: key.as_ref().to_string()`,
           "      }",
+          "    }",
+          "",
+          `    pub(super) fn as_header_value(&self) -> ${headerValuePath} {`,
+          `      ${headerValuePath}::from_str(&self.key).unwrap()`,
           "    }",
           "  }",
           "}",

@@ -15,7 +15,7 @@
     "typescript": "^5.1.6"
   },
   "dependencies": {
-    "@typespec/compiler": "^0.46.0",
-    "@typespec/http": "^0.46.0"
+    "@typespec/compiler": "latest",
+    "@typespec/http": "latest"
   }
 }

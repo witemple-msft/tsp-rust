@@ -8,6 +8,7 @@
     "@typespec/openapi3": "latest",
     "@typespec/versioning": "latest",
     "@azure-tools/typespec-azure-core": "latest",
+    "@azure-tools/typespec-csharp": "latest",
     "@azure-tools/typespec-autorest": "latest",
     "tsp-rust": "file:./tsp-rust"
   },

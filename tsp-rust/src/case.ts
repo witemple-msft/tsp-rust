@@ -61,10 +61,15 @@ export function parseCase(name: string): ReCase {
   return recase(components);
 }
 
-export interface ReCase {
+export interface ReCase extends ReCaseUpper {
   readonly components: readonly string[];
   readonly pascalCase: string;
   readonly camelCase: string;
+
+  readonly upper: ReCaseUpper;
+}
+
+interface ReCaseUpper {
   readonly snakeCase: string;
   readonly kebabCase: string;
   readonly dotCase: string;
@@ -99,6 +104,10 @@ function recase(components: readonly string[]): ReCase {
     },
     get pathCase() {
       return components.join("/");
+    },
+
+    get upper() {
+      return recase(components.map((component) => component.toUpperCase()));
     },
   });
 }

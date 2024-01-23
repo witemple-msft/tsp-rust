@@ -1,14 +1,22 @@
-import { parseCase } from "./case.js";
-import { RustContext, OptionsStructDefinition } from "./ctx.js";
-import { indent } from "./indent.js";
-import { emitTypeReference } from "./reference.js";
-import { referencePath, vendoredModulePath } from "./vendored.js";
+import { HttpOperationParameter, QueryParameterOptions } from "@typespec/http";
+import { parseCase } from "../case.js";
+import {
+  RustContext,
+  OptionsStructDefinition,
+  createPathCursor,
+} from "../ctx.js";
+import { indent } from "../indent.js";
+import { emitTypeReference } from "../reference.js";
+import { referencePath, vendoredModulePath } from "../vendored.js";
 
 export function* emitOptions(ctx: RustContext): Iterable<string> {
   if (ctx.options.length === 0) {
     return;
   } else {
     yield "pub mod options {";
+    yield "  use super::super::models;";
+    yield "";
+
     let idx = 0;
     for (const option of ctx.options) {
       yield* indent(emitOptionsStruct(ctx, option));
@@ -23,6 +31,8 @@ export function* emitOptionsStruct(
   ctx: RustContext,
   option: OptionsStructDefinition
 ): Iterable<string> {
+  const cursor = createPathCursor("http", "options");
+
   const fields = option.fields.map(function generateOptionField(field) {
     const nameCase = parseCase(field.name);
     const name = nameCase.snakeCase;
@@ -31,7 +41,7 @@ export function* emitOptionsStruct(
       field.param.type,
       field.param,
       "owned",
-      "super::models::",
+      cursor,
       option.name + nameCase.pascalCase
     );
 
@@ -43,21 +53,10 @@ export function* emitOptionsStruct(
     (field) => field.type === "header"
   );
 
-  yield `#[derive(Debug, Clone)]`;
+  yield `#[derive(Debug, Clone, Default)]`;
   yield `pub struct ${option.name} {`;
   yield* indent(fields);
   yield "}";
-  yield "";
-  yield `impl Default for ${option.name} {`;
-  yield `  fn default() -> Self {`;
-  yield `    Self {`;
-  for (const field of option.fields) {
-    const name = parseCase(field.name).snakeCase;
-    yield `      ${name}: None,`;
-  }
-  yield `    }`;
-  yield `  }`;
-  yield `}`;
   yield "";
 
   if (anyQueryParams) {
@@ -68,10 +67,22 @@ export function* emitOptionsStruct(
 
     for (const field of option.fields.filter(
       (field) => field.type === "query"
-    )) {
+    ) as Extract<HttpOperationParameter, QueryParameterOptions>[]) {
       const name = parseCase(field.name).snakeCase;
       yield `    if let Some(value) = &self.${name} {`;
-      yield `      parts.push(format!("${field.name}={}", value));`;
+      switch (field.format) {
+        case undefined:
+          yield `      parts.push(format!("${field.name}={}", value));`;
+          break;
+        case "csv":
+          yield `      use ${vendoredModulePath("itertools", "Itertools")};`;
+          yield `      parts.push(format!("${field.name}={}", value.iter().join(",")));`;
+          break;
+        default:
+          throw new Error(
+            "Unsupported query parameter format: " + field.format
+          );
+      }
       yield `    }`;
       yield "";
     }
@@ -97,7 +108,7 @@ export function* emitOptionsStruct(
       yield `    if let Some(value) = &self.${parseCase(field.name).snakeCase} {`;
       yield "      headers.insert(";
       // prettier-ignore
-      yield `        ${vendoredModulePath("reqwest", "header", "HeaderName")}::from_static("${field.name}"),`;
+      yield `        ${vendoredModulePath("reqwest", "header", "HeaderName")}::from_static("${field.name.toLowerCase()}"),`;
       // prettier-ignore
       yield `        ${vendoredModulePath("reqwest", "header", "HeaderValue")}::from_str(value.as_str()).unwrap()`;
       yield "      );";

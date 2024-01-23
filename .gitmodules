@@ -1,3 +1,9 @@
 [submodule "azure-rest-api-specs"]
 	path = azure-rest-api-specs
 	url = https://github.com/Azure/azure-rest-api-specs.git
+[submodule "openai"]
+	path = openai
+	url = https://github.com/bterlson/openai-in-typespec.git
+[submodule "azure-rest-api-specs-pr"]
+	path = azure-rest-api-specs-pr
+	url = https://github.com/Azure/azure-rest-api-specs-pr.git
