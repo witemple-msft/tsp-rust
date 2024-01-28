@@ -7,13 +7,13 @@ import {
   BooleanLiteral,
 } from "@typespec/compiler";
 import { HttpOperation, QueryParameterOptions } from "@typespec/http";
-import { bifilter } from "../bifilter.js";
-import { parseCase } from "../case.js";
+import { bifilter } from "../util/bifilter.js";
+import { parseCase } from "../util/case.js";
 import { RustContext, createPathCursor } from "../ctx.js";
-import { indent } from "../indent.js";
+import { indent } from "../util/indent.js";
 import { createResultInfo } from "./result.js";
-import { vendoredModulePath } from "../vendored.js";
-import { emitTypeReference, isValueLiteralType } from "../reference.js";
+import { vendoredModulePath } from "../util/vendored.js";
+import { emitTypeReference, isValueLiteralType } from "../common/reference.js";
 import { AuthCode } from "./auth.js";
 
 export function* emitHttpOperations(
@@ -21,7 +21,7 @@ export function* emitHttpOperations(
   auth: AuthCode,
   mutResponseLines: string[]
 ): Iterable<string> {
-  for (const operation of ctx.service.operations) {
+  for (const operation of ctx.httpService.operations) {
     yield* emitOperation(ctx, operation, auth, mutResponseLines);
   }
 }

@@ -16,12 +16,17 @@
  * @param name - a name in any case
  */
 export declare function parseCase(name: string): ReCase;
-export interface ReCase {
+export interface ReCase extends ReCaseUpper {
     readonly components: readonly string[];
     readonly pascalCase: string;
     readonly camelCase: string;
+    readonly upper: ReCaseUpper;
+}
+interface ReCaseUpper {
     readonly snakeCase: string;
     readonly kebabCase: string;
     readonly dotCase: string;
     readonly pathCase: string;
+    join(separator: string): string;
 }
+export {};

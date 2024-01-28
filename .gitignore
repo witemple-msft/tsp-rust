@@ -1,1 +1,4 @@
 node_modules
+tsp-output
+target
+dist/

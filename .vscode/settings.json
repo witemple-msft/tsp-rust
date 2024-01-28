@@ -1,0 +1,4 @@
+{
+  "typespec.tsp-server.path": "/home/wtemple/Development/tsp-rust/example/node_modules/@typespec/compiler",
+  "cSpell.words": ["bifilter", "reqwest", "serde"]
+}

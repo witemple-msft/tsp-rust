@@ -1,13 +1,13 @@
 import { HttpOperationParameter, QueryParameterOptions } from "@typespec/http";
-import { parseCase } from "../case.js";
+import { parseCase } from "../util/case.js";
 import {
   RustContext,
   OptionsStructDefinition,
   createPathCursor,
 } from "../ctx.js";
-import { indent } from "../indent.js";
-import { emitTypeReference } from "../reference.js";
-import { referencePath, vendoredModulePath } from "../vendored.js";
+import { indent } from "../util/indent.js";
+import { emitTypeReference } from "../common/reference.js";
+import { referencePath, vendoredModulePath } from "../util/vendored.js";
 
 export function* emitOptions(ctx: RustContext): Iterable<string> {
   if (ctx.options.length === 0) {

@@ -1,9 +1,9 @@
 import { HttpServer } from "@typespec/http";
 import { RustContext, createPathCursor } from "../ctx.js";
 import { Type } from "@typespec/compiler";
-import { parseCase } from "../case.js";
-import { emitTypeReference } from "../reference.js";
-import { vendoredModulePath } from "../vendored.js";
+import { parseCase } from "../util/case.js";
+import { emitTypeReference } from "../common/reference.js";
+import { vendoredModulePath } from "../util/vendored.js";
 import { AuthCode } from "./auth.js";
 
 export interface ServerDescription {

@@ -1,0 +1,11 @@
+{
+  "name": "example",
+  "version": "0.1.0",
+  "type": "module",
+  "dependencies": {
+    "@typespec/compiler": "latest",
+    "@typespec/http": "latest",
+    "tsp-rust": "../tsp-rust"
+  },
+  "private": true
+}

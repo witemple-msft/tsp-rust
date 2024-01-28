@@ -1,58 +1,81 @@
 #![feature(decl_macro)]
 #![feature(let_chains)]
 
+use std::{error::Error, future::Future};
+
+use linkme::distributed_slice;
+
+#[distributed_slice]
+static FEATURES: [&str];
+
+#[cfg(feature = "http")]
+#[distributed_slice(FEATURES)]
+static HTTP_FEATURE: &str = "http";
+
 pub mod vendored {
     pub use bigdecimal;
     pub use chrono;
     pub use itertools;
     pub use log;
-    pub use reqwest;
     pub use serde;
     pub use serde_json;
     pub use serde_with;
     pub use thiserror;
+
+    #[cfg(feature = "http")]
+    pub use super::http::vendored::*;
 }
 
-pub trait QueryString {
-    fn query_string(&self) -> String;
-}
+trait OperationResult<T, E: Error>: Future<Output = Result<T, E>> + Send {}
+impl<R: Future<Output = Result<T, E>> + Send, T, E: Error> OperationResult<T, E> for R {}
 
-pub trait HeaderMap {
-    fn header_map(&self) -> reqwest::header::HeaderMap;
-}
+#[cfg(feature = "http")]
+pub mod http {
+    pub mod vendored {
+        pub use reqwest;
+    }
 
-pub type OperationResult<Body, Error> = Result<Body, OperationError<Error>>;
+    pub trait QueryString {
+        fn query_string(&self) -> String;
+    }
 
-pub trait FromHeaders {
-    // TODO: should return a Result
-    fn from_headers(headers: &reqwest::header::HeaderMap) -> Self;
-}
+    pub trait HeaderMap {
+        fn header_map(&self) -> reqwest::header::HeaderMap;
+    }
 
-pub trait FromResponseParts {
-    type Body: serde::de::DeserializeOwned;
-    type Headers: FromHeaders;
+    pub type OperationResult<Body, Error> = Result<Body, OperationError<Error>>;
 
-    // TODO: should return a Result
-    fn from_response_parts(body: Self::Body, headers: Self::Headers) -> Self;
-}
+    pub trait FromHeaders {
+        // TODO: should return a Result
+        fn from_headers(headers: &reqwest::header::HeaderMap) -> Self;
+    }
 
-pub struct OperationResponse<Body> {
-    pub body: Body,
-    pub headers: reqwest::header::HeaderMap,
-}
+    pub trait FromResponseParts {
+        type Body: serde::de::DeserializeOwned;
+        type Headers: FromHeaders;
 
-#[derive(thiserror::Error, Debug)]
-pub enum OperationError<E: core::fmt::Debug> {
-    #[error("Service error {0}: {1:?}")]
-    Service(u16, E),
-    #[error("Unexpected status code {0}: {1:?}")]
-    UnexpectedStatus(u16, reqwest::Response),
-    #[error(transparent)]
-    Transport(#[from] reqwest::Error),
-    #[error(transparent)]
-    Json(#[from] serde_json::Error),
-    #[error("Unknown error: {0:?}")]
-    Unknown(Box<dyn std::error::Error + Send + Sync + 'static>),
+        // TODO: should return a Result
+        fn from_response_parts(body: Self::Body, headers: Self::Headers) -> Self;
+    }
+
+    pub struct OperationResponse<Body> {
+        pub body: Body,
+        pub headers: reqwest::header::HeaderMap,
+    }
+
+    #[derive(thiserror::Error, Debug)]
+    pub enum OperationError<E: core::fmt::Debug> {
+        #[error("Service error {0}: {1:?}")]
+        Service(u16, E),
+        #[error("Unexpected status code {0}: {1:?}")]
+        UnexpectedStatus(u16, reqwest::Response),
+        #[error(transparent)]
+        Transport(#[from] reqwest::Error),
+        #[error(transparent)]
+        Json(#[from] serde_json::Error),
+        #[error("Unknown error: {0:?}")]
+        Unknown(Box<dyn std::error::Error + Send + Sync + 'static>),
+    }
 }
 
 pub mod serialize {
@@ -121,7 +144,7 @@ pub mod build {
             .arg("--output-dir")
             .arg(output_dir.clone())
             .output()
-            .expect("Failed to run tsp");
+            .expect("Failed to run tsp, is it installed?");
 
         let mut visited = std::collections::HashSet::new();
         visited.insert(main_file.clone());
@@ -169,7 +192,9 @@ pub mod build {
             let reader = std::io::BufReader::new(file);
 
             for line in reader.lines().filter_map(|l| {
-                if let Ok(l) = l && l.starts_with("import") {
+                if let Ok(l) = l
+                    && l.starts_with("import")
+                {
                     Some(l)
                 } else {
                     None
@@ -232,12 +257,13 @@ pub mod build {
         std::fs::copy(output_dir.join("tsp-rust").join("output.rs"), output_rs).unwrap();
     }
 
+    #[cfg(debug_assertions)]
     pub mod __dev {
         use std::path::PathBuf;
 
         /// Watches the JS files in the emitter directory. The root parameter is
         /// where to look for the emitter directory.
-        pub fn watch_js(root: PathBuf) {
+        pub fn spit_cargo_watch_js(root: PathBuf) {
             // Outputs are located in the `dist` folder under the root.
             let output_dir = root.join("dist");
 

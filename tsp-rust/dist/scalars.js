@@ -39,10 +39,11 @@ function createScalarsMap(program) {
     const entries = [
         [program.resolveTypeReference("TypeSpec.bytes"), ob("Vec<u8>", "&[u8]")],
         [program.resolveTypeReference("TypeSpec.boolean"), copy("bool")],
-        [
-            program.resolveTypeReference("TypeSpec.string"),
-            obp("String", "&str", "impl Into<String>"),
-        ],
+        // [
+        //   program.resolveTypeReference("TypeSpec.string"),
+        //   obp("String", "&str", "impl Into<String>"),
+        // ],
+        [program.resolveTypeReference("TypeSpec.string"), ob("String", "&str")],
         // [program.resolveTypeReference("TypeSpec.usize"), copy("usize")],
         // [program.resolveTypeReference("TypeSpec.isize"), copy("isize")],
         [program.resolveTypeReference("TypeSpec.int64"), copy("i64")],

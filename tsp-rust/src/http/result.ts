@@ -7,13 +7,13 @@ import {
   isHeader,
 } from "@typespec/http";
 import { RustContext, createPathCursor } from "../ctx.js";
-import { bifilter } from "../bifilter.js";
+import { bifilter } from "../util/bifilter.js";
 import { ModelProperty, isErrorModel } from "@typespec/compiler";
-import { indent } from "../indent.js";
-import { ReCase, parseCase } from "../case.js";
-import { emitTypeReference } from "../reference.js";
-import { referencePath, vendoredModulePath } from "../vendored.js";
-import { KEYWORDS } from "../keywords.js";
+import { indent } from "../util/indent.js";
+import { ReCase, parseCase } from "../util/case.js";
+import { emitTypeReference } from "../common/reference.js";
+import { referencePath, vendoredModulePath } from "../util/vendored.js";
+import { KEYWORDS } from "../common/keywords.js";
 
 export interface ResultInfo {
   readonly returnType: string;
@@ -110,15 +110,15 @@ export function createResultInfo(
   const successTypeReference = successExtrinsicResponse
     ? "response::" + successExtrinsicResponse.typeName
     : successResponse.body === undefined
-    ? "()"
-    : emitTypeReference(
-        ctx,
-        successResponse.body.type,
-        successResponse.body.type,
-        "owned",
-        cursor,
-        operationCase.pascalCase + "Response"
-      );
+      ? "()"
+      : emitTypeReference(
+          ctx,
+          successResponse.body.type,
+          successResponse.body.type,
+          "owned",
+          cursor,
+          operationCase.pascalCase + "Response"
+        );
 
   // prettier-ignore
 
@@ -134,7 +134,7 @@ export function createResultInfo(
 
     if (response.responses.length !== 1) {
       throw new Error(
-        `Number of respones not supported, expected 1 got ${response.responses.length}`
+        `Number of responses not supported, expected 1 got ${response.responses.length}`
       );
     }
 
@@ -192,15 +192,15 @@ export function createResultInfo(
   const errorTypeReference = errorExtrinsicResponse
     ? "response::" + errorExtrinsicResponse.typeName
     : errorResponse?.body
-    ? emitTypeReference(
-        ctx,
-        errorResponse.body.type,
-        errorResponse.body.type,
-        "owned",
-        cursor,
-        operationCase.pascalCase + "ErrorResponseBody"
-      )
-    : "()";
+      ? emitTypeReference(
+          ctx,
+          errorResponse.body.type,
+          errorResponse.body.type,
+          "owned",
+          cursor,
+          operationCase.pascalCase + "ErrorResponseBody"
+        )
+      : "()";
 
   const returnType = referencePath(
     `OperationResult<${successTypeReference}, ${errorTypeReference}>`

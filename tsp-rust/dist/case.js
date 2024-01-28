@@ -24,9 +24,10 @@ export function parseCase(name) {
         // Special case acronym handling. We want to treat acronyms as a single component,
         // but we also want the last capitalized letter in an all caps sequence to start a new
         // component if the next letter is lower case.
-        // For example: "HTTPResponse" => ["http", "response"]
-        //     : "OpenAIContext" => ["open", "ai", "context"]
-        //  but: "HTTPresponse" (wrong) => ["htt", "presponse"]
+        // For example : "HTTPResponse" => ["http", "response"]
+        //             : "OpenAIContext" => ["open", "ai", "context"]
+        //  but        : "HTTPresponse" (wrong) => ["htt", "presponse"]
+        //  however    : "HTTP_response" (okay I guess) => ["http", "response"]
         // If the character is a separator or an upper case character, we push the current component and start a new one.
         if (char === char.toUpperCase() && !/[0-9]/.test(char)) {
             // If we're in an acronym, we need to check if the next character is lower case.
@@ -34,7 +35,7 @@ export function parseCase(name) {
             const acronymRestart = inAcronym &&
                 /[A-Z]/.test(char) &&
                 i + 1 < name.length &&
-                /[a-z]/.test(name[i + 1]);
+                /[^A-Z]/.test(name[i + 1]);
             if (currentComponent.length > 0 && (acronymRestart || !inAcronym)) {
                 components.push(currentComponent.trim());
                 currentComponent = "";
@@ -76,6 +77,12 @@ function recase(components) {
         },
         get pathCase() {
             return components.join("/");
+        },
+        get upper() {
+            return recase(components.map((component) => component.toUpperCase()));
+        },
+        join(separator) {
+            return components.join(separator);
         },
     });
 }
