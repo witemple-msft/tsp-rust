@@ -17,6 +17,14 @@ using TypeSpec.Http;
 )
 namespace Example;
 
+@error
+model Error {
+    @statusCode code: 400;
+    @body body: {
+        message: string;
+    }
+}
+
 /**
  * A freestanding operation.
  */
@@ -25,7 +33,7 @@ namespace Example;
 op freestanding(): {
     @statusCode code: 200;
     @body example: bytes;
-};
+} | Error;
 
 
 /**

@@ -7,18 +7,22 @@ import {
   isNullType,
   isRecordModelType,
 } from "@typespec/compiler";
-import { PathCursor, RustContext } from "../ctx.js";
-import { referencePath, vendoredModulePath } from "../util/vendored.js";
+import { PartialUnionSynthetic, PathCursor, RustContext } from "../ctx.js";
+import {
+  referenceHostPath,
+  referenceVendoredHostPath,
+} from "../util/vendored.js";
 import { parseCase } from "../util/case.js";
 import { emitTypeReference } from "./reference.js";
 
 export function* emitUnion(
   ctx: RustContext,
-  union: Union,
+  union: Union | PartialUnionSynthetic,
   cursor: PathCursor,
   altName?: string
 ): Iterable<string> {
   const name = union.name ? parseCase(union.name).pascalCase : altName;
+  const isPartialSynthetic = union.kind === "partialUnion";
 
   if (name === undefined) {
     throw new Error("Internal Error: Union name is undefined");
@@ -28,13 +32,15 @@ export function* emitUnion(
     (v) => typeof v.name === "string" && v.name
   );
 
-  const discriminator = getDiscriminator(ctx.program, union)?.propertyName;
+  const discriminator = isPartialSynthetic
+    ? undefined
+    : getDiscriminator(ctx.program, union)?.propertyName;
 
-  yield `#[derive(Debug, Clone, PartialEq, ${vendoredModulePath(
+  yield `#[derive(Debug, Clone, PartialEq, ${referenceVendoredHostPath(
     "serde",
     "Deserialize"
-  )}, ${vendoredModulePath("serde", "Serialize")})]`;
-  yield `#[serde(crate = "${vendoredModulePath("serde")}")]`;
+  )}, ${referenceVendoredHostPath("serde", "Serialize")})]`;
+  yield `#[serde(crate = "${referenceVendoredHostPath("serde")}")]`;
 
   if (allVariantsAreNamed && discriminator) {
     yield `#[serde(tag = "${discriminator}")]`;
@@ -42,13 +48,17 @@ export function* emitUnion(
     yield `#[serde(untagged)]`;
   }
 
-  const doc = getDoc(ctx.program, union);
+  const doc = isPartialSynthetic ? undefined : getDoc(ctx.program, union);
   if (doc) yield `#[doc = ${JSON.stringify(doc)}]`;
 
   yield `pub enum ${name} {`;
 
+  const variants = isPartialSynthetic
+    ? union.variants.map((v) => [v.name, v] as const)
+    : union.variants.entries();
+
   let idx = 0;
-  for (const [key, variant] of union.variants) {
+  for (const [key, variant] of variants) {
     idx += 1;
 
     const variantName =
@@ -58,7 +68,7 @@ export function* emitUnion(
 
     if (isNullType(variant.type)) {
       // prettier-ignore
-      yield `  #[serde(with = "${referencePath("serialize", "null_variant")}")]`;
+      yield `  #[serde(with = "${referenceHostPath("serialize", "null_variant")}")]`;
       yield "  Null,";
     } else if (variant.type.kind == "String") {
       yield `  #[serde(rename = ${JSON.stringify(variant.type.value)})]`;

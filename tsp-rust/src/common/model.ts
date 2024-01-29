@@ -14,7 +14,10 @@ import { KEYWORDS } from "./keywords.js";
 import { getFullyQualifiedTypeName } from "../util/name.js";
 import { getRecordValueName, getArrayElementName } from "../util/pluralism.js";
 import { RustTranslation } from "./scalar.js";
-import { referencePath, vendoredModulePath } from "../util/vendored.js";
+import {
+  referenceHostPath,
+  referenceVendoredHostPath,
+} from "../util/vendored.js";
 import { emitTypeReference, isValueLiteralType } from "./reference.js";
 import { getHeaderFieldName, isHeader } from "@typespec/http";
 import { emitDocumentation } from "./documentation.js";
@@ -146,11 +149,11 @@ export function* emitModel(
   } else {
     if (requiresAs) {
       // prettier-ignore
-      yield `#[${vendoredModulePath("serde_with", "serde_as")}(crate = "${vendoredModulePath("serde_with")}")]`;
+      yield `#[${referenceVendoredHostPath("serde_with", "serde_as")}(crate = "${referenceVendoredHostPath("serde_with")}")]`;
     }
     // prettier-ignore
-    yield `#[derive(${deriveString}, ${vendoredModulePath("serde", "Deserialize")}, ${vendoredModulePath("serde", "Serialize")})]`;
-    yield `#[serde(crate = "${vendoredModulePath("serde")}")]`;
+    yield `#[derive(${deriveString}, ${referenceVendoredHostPath("serde", "Deserialize")}, ${referenceVendoredHostPath("serde", "Serialize")})]`;
+    yield `#[serde(crate = "${referenceVendoredHostPath("serde")}")]`;
   }
 
   yield `pub struct ${structName} {`;
@@ -163,13 +166,13 @@ export function* emitModel(
     yield "#[allow(non_camel_case_types)]";
     if (requiresAs) {
       // prettier-ignore
-      yield `#[${vendoredModulePath("serde_with", "serde_as")}(crate = ${vendoredModulePath("serde_with")})]`;
+      yield `#[${referenceVendoredHostPath("serde_with", "serde_as")}(crate = ${referenceVendoredHostPath("serde_with")})]`;
     }
-    yield `#[derive(Debug, Clone, PartialEq, ${vendoredModulePath(
+    yield `#[derive(Debug, Clone, PartialEq, ${referenceVendoredHostPath(
       "serde",
       "Deserialize"
-    )}, ${vendoredModulePath("serde", "Serialize")})]`;
-    yield `#[serde(crate = "${vendoredModulePath("serde")}")]`;
+    )}, ${referenceVendoredHostPath("serde", "Serialize")})]`;
+    yield `#[serde(crate = "${referenceVendoredHostPath("serde")}")]`;
     yield `pub struct ${structName}__Body {`;
     yield* indent(bodyLines);
     yield "}";
@@ -191,9 +194,11 @@ export function* emitModel(
     }
     yield "}";
     yield "";
-    yield `impl ${referencePath("FromHeaders")} for ${structName}__Headers {`;
+    yield `impl ${referenceHostPath(
+      "FromHeaders"
+    )} for ${structName}__Headers {`;
     // prettier-ignore
-    yield `  fn from_headers(headers: &${vendoredModulePath("reqwest", "header", "HeaderMap")}) -> Self {`;
+    yield `  fn from_headers(headers: &${referenceVendoredHostPath("reqwest", "header", "HeaderMap")}) -> Self {`;
     yield `    Self {`;
     for (const h of headerFieldSpecs) {
       const basicName = parseCase(h.name).snakeCase;
@@ -208,7 +213,7 @@ export function* emitModel(
     yield "}";
 
     // prettier-ignore
-    yield `impl ${referencePath("FromResponseParts")} for ${structName} {`;
+    yield `impl ${referenceHostPath("FromResponseParts")} for ${structName} {`;
     yield `  type Body = ${structName}__Body;`;
     yield `  type Headers = ${structName}__Headers;`;
     yield "";
@@ -421,7 +426,7 @@ function getEncodingAsLines(
     debugger;
     return [
       // prettier-ignore
-      `#[serde_as(as = "${vendoredModulePath("serde_with", "TimestampSeconds")}<i64>")]`,
+      `#[serde_as(as = "${referenceVendoredHostPath("serde_with", "TimestampSeconds")}<i64>")]`,
     ];
   }
 

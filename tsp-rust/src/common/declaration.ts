@@ -25,14 +25,30 @@ export function emitDeclarations(ctx: RustContext): string[] {
 
     while (ctx.synthetics.length > 0) {
       const synthetic = ctx.synthetics.shift()!;
-      syntheticLines.push(
-        ...emitDeclaration(
-          ctx,
-          synthetic.underlying,
-          cursor.enter("synthetic"),
-          synthetic.name
-        )
-      );
+      switch (synthetic.kind) {
+        case "anonymous": {
+          syntheticLines.push(
+            ...emitDeclaration(
+              ctx,
+              synthetic.underlying,
+              cursor.enter("synthetic"),
+              synthetic.name
+            )
+          );
+          break;
+        }
+        case "partialUnion": {
+          syntheticLines.push(
+            ...emitUnion(
+              ctx,
+              synthetic,
+              cursor.enter("synthetic"),
+              synthetic.name
+            )
+          );
+          break;
+        }
+      }
     }
   }
 

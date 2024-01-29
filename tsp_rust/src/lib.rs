@@ -1,7 +1,7 @@
 #![feature(decl_macro)]
 #![feature(let_chains)]
 
-use std::{error::Error, future::Future};
+use std::future::Future;
 
 use linkme::distributed_slice;
 
@@ -15,6 +15,7 @@ static HTTP_FEATURE: &str = "http";
 pub mod vendored {
     pub use bigdecimal;
     pub use chrono;
+    pub use futures;
     pub use itertools;
     pub use log;
     pub use serde;
@@ -26,13 +27,72 @@ pub mod vendored {
     pub use super::http::vendored::*;
 }
 
-trait OperationResult<T, E: Error>: Future<Output = Result<T, E>> + Send {}
-impl<R: Future<Output = Result<T, E>> + Send, T, E: Error> OperationResult<T, E> for R {}
+pub trait OperationFuture<T, E>: Future<Output = Result<T, E>> + Send {}
+impl<R: Future<Output = Result<T, E>> + Send, T, E> OperationFuture<T, E> for R {}
 
 #[cfg(feature = "http")]
 pub mod http {
+    use std::{convert::Infallible, pin::Pin};
+
+    use bytes::Bytes;
+    use futures::Stream;
+    use http_body::Frame;
+    use http_body_util::StreamBody;
+    use serde::Deserialize;
+
     pub mod vendored {
+        pub use bytes;
+        pub use http;
+        pub use http_body;
+        pub use http_body_util;
         pub use reqwest;
+        pub use tower;
+    }
+
+    pub trait Service<ResponseBody: http_body::Body>:
+        tower::Service<http::Request<Body>, Response = http::Response<ResponseBody>>
+    {
+    }
+    impl<S, ResponseBody: http_body::Body> Service<ResponseBody> for S where
+        S: tower::Service<http::Request<Body>, Response = http::Response<ResponseBody>>
+    {
+    }
+
+    pub type Body =
+        StreamBody<Pin<Box<dyn Stream<Item = Result<Frame<Bytes>, Infallible>> + Send>>>;
+
+    pub enum Error<Body: http_body::Body, ServiceError, OperationError> {
+        Deserialize(serde_json::Error),
+        Body(Body::Error),
+        Service(ServiceError),
+        Operation(OperationError),
+        UnexpectedStatus(http::Response<Body>),
+    }
+
+    pub async fn send_request<ResponseBody: http_body::Body, S: Service<ResponseBody>, E>(
+        service: &mut S,
+        request: http::Request<Body>,
+    ) -> Result<S::Response, Error<ResponseBody, S::Error, E>> {
+        futures::future::poll_fn(|cx| service.poll_ready(cx))
+            .await
+            .map_err(Error::Service)?;
+
+        service.call(request).await.map_err(Error::Service)
+    }
+
+    pub async fn deserialize_body<
+        T: for<'a> Deserialize<'a>,
+        Body: http_body::Body,
+        ServiceError,
+        OperationError,
+    >(
+        body: Body,
+    ) -> Result<T, Error<Body, ServiceError, OperationError>> {
+        use http_body_util::BodyExt;
+
+        let data = body.collect().await.map_err(Error::Body)?.to_bytes();
+
+        serde_json::from_slice(&data).map_err(Error::Deserialize)
     }
 
     pub trait QueryString {

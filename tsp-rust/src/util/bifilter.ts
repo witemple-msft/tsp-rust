@@ -1,5 +1,5 @@
 export function bifilter<T>(
-  values: T[],
+  values: Iterable<T>,
   predicate: (o: T) => boolean
 ): [T[], T[]] {
   const pass: T[] = [];

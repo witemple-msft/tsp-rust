@@ -7,7 +7,10 @@ import {
 } from "../ctx.js";
 import { indent } from "../util/indent.js";
 import { emitTypeReference } from "../common/reference.js";
-import { referencePath, vendoredModulePath } from "../util/vendored.js";
+import {
+  referenceHostPath,
+  referenceVendoredHostPath,
+} from "../util/vendored.js";
 
 export function* emitOptions(ctx: RustContext): Iterable<string> {
   if (ctx.options.length === 0) {
@@ -60,7 +63,7 @@ export function* emitOptionsStruct(
   yield "";
 
   if (anyQueryParams) {
-    yield `impl ${referencePath("QueryString")} for ${option.name} {`;
+    yield `impl ${referenceHostPath("QueryString")} for ${option.name} {`;
     yield `  fn query_string(&self) -> String {`;
     yield `    let mut parts = vec![];`;
     yield "";
@@ -75,7 +78,10 @@ export function* emitOptionsStruct(
           yield `      parts.push(format!("${field.name}={}", value));`;
           break;
         case "csv":
-          yield `      use ${vendoredModulePath("itertools", "Itertools")};`;
+          yield `      use ${referenceVendoredHostPath(
+            "itertools",
+            "Itertools"
+          )};`;
           yield `      parts.push(format!("${field.name}={}", value.iter().join(",")));`;
           break;
         default:
@@ -94,11 +100,11 @@ export function* emitOptionsStruct(
   }
 
   if (anyHeaderParams) {
-    yield `impl ${referencePath("HeaderMap")} for ${option.name} {`;
+    yield `impl ${referenceHostPath("HeaderMap")} for ${option.name} {`;
     // prettier-ignore
-    yield `  fn header_map(&self) -> ${vendoredModulePath("reqwest", "header", "HeaderMap")}{`;
+    yield `  fn header_map(&self) -> ${referenceVendoredHostPath("reqwest", "header", "HeaderMap")}{`;
     // prettier-ignore
-    yield `    let mut headers = ${vendoredModulePath("reqwest", "header", "HeaderMap")}::new();`;
+    yield `    let mut headers = ${referenceVendoredHostPath("reqwest", "header", "HeaderMap")}::new();`;
     yield "";
 
     for (const field of option.fields.filter(
@@ -108,9 +114,9 @@ export function* emitOptionsStruct(
       yield `    if let Some(value) = &self.${parseCase(field.name).snakeCase} {`;
       yield "      headers.insert(";
       // prettier-ignore
-      yield `        ${vendoredModulePath("reqwest", "header", "HeaderName")}::from_static("${field.name.toLowerCase()}"),`;
+      yield `        ${referenceVendoredHostPath("reqwest", "header", "HeaderName")}::from_static("${field.name.toLowerCase()}"),`;
       // prettier-ignore
-      yield `        ${vendoredModulePath("reqwest", "header", "HeaderValue")}::from_str(value.as_str()).unwrap()`;
+      yield `        ${referenceVendoredHostPath("reqwest", "header", "HeaderValue")}::from_str(value.as_str()).unwrap()`;
       yield "      );";
       yield `    }`;
       yield "";

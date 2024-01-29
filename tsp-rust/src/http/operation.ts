@@ -12,7 +12,7 @@ import { parseCase } from "../util/case.js";
 import { RustContext, createPathCursor } from "../ctx.js";
 import { indent } from "../util/indent.js";
 import { createResultInfo } from "./result.js";
-import { vendoredModulePath } from "../util/vendored.js";
+import { referenceVendoredHostPath } from "../util/vendored.js";
 import { emitTypeReference, isValueLiteralType } from "../common/reference.js";
 import { AuthCode } from "./auth.js";
 
@@ -155,7 +155,7 @@ export function* emitOperation(
   )) {
     const name = parseCase(headerParam.param.name).snakeCase;
     requiredHeaderPreparation.push(
-      `.header(${vendoredModulePath(
+      `.header(${referenceVendoredHostPath(
         "reqwest",
         "header",
         "HeaderName"
@@ -172,7 +172,7 @@ export function* emitOperation(
         break;
       case "header":
         requiredHeaderPreparation.push(
-          `.header(${vendoredModulePath(
+          `.header(${referenceVendoredHostPath(
             "reqwest",
             "header",
             "HeaderName"
@@ -193,7 +193,7 @@ export function* emitOperation(
   requiredHeaderPreparation.push(
     ...auth.headers.map(
       ([name, expr]) =>
-        `.header(${vendoredModulePath(
+        `.header(${referenceVendoredHostPath(
           "reqwest",
           "header",
           "HeaderName"

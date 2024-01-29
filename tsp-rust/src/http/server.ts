@@ -3,7 +3,7 @@ import { RustContext, createPathCursor } from "../ctx.js";
 import { Type } from "@typespec/compiler";
 import { parseCase } from "../util/case.js";
 import { emitTypeReference } from "../common/reference.js";
-import { vendoredModulePath } from "../util/vendored.js";
+import { referenceVendoredHostPath } from "../util/vendored.js";
 import { AuthCode } from "./auth.js";
 
 export interface ServerDescription {
@@ -60,7 +60,7 @@ export function getServerDescription(
 
   const ctxLines = [
     `pub struct ${ctx.contextTypeName} {`,
-    `  client: ${vendoredModulePath("reqwest", "Client")}`,
+    `  client: ${referenceVendoredHostPath("reqwest", "Client")}`,
     ...ctxParams.map(function ({ name, type }) {
       return `  ${name}: ${type},`;
     }),
@@ -70,7 +70,7 @@ export function getServerDescription(
     // prettier-ignore
     `  pub fn new(${ctxParams.map(({ name, type }) => `${name}: ${type}`).join(", ")}) -> Self {`,
     `    Self {`,
-    `      client: ${vendoredModulePath("reqwest", "Client")}::new(),`,
+    `      client: ${referenceVendoredHostPath("reqwest", "Client")}::new(),`,
     ...ctxParams.map(function ({ name }) {
       return `      ${name},`;
     }),

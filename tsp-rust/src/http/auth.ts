@@ -1,7 +1,7 @@
 import { ApiKeyAuth } from "@typespec/http";
 import { parseCase } from "../util/case.js";
 import { RustContext } from "../ctx.js";
-import { vendoredModulePath } from "../util/vendored.js";
+import { referenceVendoredHostPath } from "../util/vendored.js";
 
 export interface AuthCode {
   fields: string[];
@@ -67,7 +67,7 @@ function generateApiKeyAuth(
     throw new Error("TODO: only header auth is supported");
   }
 
-  const headerValuePath = vendoredModulePath(
+  const headerValuePath = referenceVendoredHostPath(
     "reqwest",
     "header",
     "HeaderValue"

@@ -1,7 +1,11 @@
 import "source-map-support/register.js";
 
 import { EmitContext, Namespace, listServices } from "@typespec/compiler";
-import { RustEmitterOptions } from "./lib.js";
+import {
+  DEFAULT_CRATE_PATH,
+  DEFAULT_OUTPUT_MODE,
+  RustEmitterOptions,
+} from "./lib.js";
 import { Module, RustContext, createPathCursor } from "./ctx.js";
 import { parseCase } from "./util/case.js";
 import {
@@ -12,18 +16,27 @@ import { writeModuleTree } from "./write.js";
 import { createOnceQueue } from "./util/onceQueue.js";
 import { emitDeclaration } from "./common/declaration.js";
 import { UnimplementedError } from "./util/error.js";
+import { setHostPath } from "./util/vendored.js";
+import { getFeatureHandler } from "./feature.js";
+
+// #region features
+
+import "./http/feature.js";
+import { emitUnion } from "./common/union.js";
+
+// #endregion
 
 export { $lib } from "./lib.js";
 
-export const namespace = "TypeSpec";
-
 export async function $onEmit(context: EmitContext<RustEmitterOptions>) {
+  setHostPath(context.options["crate-path"] ?? DEFAULT_CRATE_PATH);
+
   const services = listServices(context.program);
 
   if (services.length === 0) {
-    throw new Error("No services found in program.");
+    console.warn("No services found in program.");
+    return;
   } else if (services.length > 1) {
-    // TODO
     throw new UnimplementedError("multiple service definitions per program.");
   }
 
@@ -35,6 +48,7 @@ export async function $onEmit(context: EmitContext<RustEmitterOptions>) {
 
   const globalNamespace = context.program.getGlobalNamespaceType();
 
+  // Module for all types in all namespaces.
   const allModule: Module = {
     name: "all",
     cursor: rootCursor.enter("models", "all"),
@@ -46,6 +60,7 @@ export async function $onEmit(context: EmitContext<RustEmitterOptions>) {
     inline: false,
   };
 
+  // Module for all synthetic (named ad-hoc) types.
   const syntheticModule: Module = {
     name: "synthetic",
     cursor: rootCursor.enter("models", "synthetic"),
@@ -56,6 +71,7 @@ export async function $onEmit(context: EmitContext<RustEmitterOptions>) {
     inline: false,
   };
 
+  // Module for all models, including synthetic and all.
   const modelsModule: Module = {
     name: "models",
     cursor: rootCursor.enter("models"),
@@ -66,6 +82,7 @@ export async function $onEmit(context: EmitContext<RustEmitterOptions>) {
     inline: false,
   };
 
+  // Root module for emit.
   const rootModule: Module = {
     name: serviceModuleName,
     cursor: rootCursor,
@@ -94,8 +111,10 @@ export async function $onEmit(context: EmitContext<RustEmitterOptions>) {
 
     options: [],
 
+    rootModule,
     baseNamespace: service.type,
     namespaceModules: new Map([[globalNamespace, allModule]]),
+    syntheticUnions: new Set(),
   };
 
   // Find the root of the service module and recursively reconstruct a path to it, adding the definitions along the way.
@@ -120,9 +139,13 @@ export async function $onEmit(context: EmitContext<RustEmitterOptions>) {
     parentModule = module;
   }
 
-  // This is where we would activate the protocol-specific codepaths like http, jsonrpc, protobuf, etc.
-
-  // TODO: check for `http` feature and emit HTTP code if set.
+  for (const [name, options] of Object.entries(context.options.features) as [
+    keyof RustEmitterFeature,
+    any,
+  ][]) {
+    const handler = getFeatureHandler(name);
+    await handler(rustCtx, options);
+  }
 
   if (!context.options["omit-unreachable-types"]) {
     // Visit everything in the service namespace to ensure we emit a full `models` module and not just the subparts that
@@ -151,16 +174,41 @@ export async function $onEmit(context: EmitContext<RustEmitterOptions>) {
     while (rustCtx.synthetics.length > 0) {
       const synthetic = rustCtx.synthetics.shift()!;
 
-      syntheticModule.declarations.push([
-        ...emitDeclaration(
-          rustCtx,
-          synthetic.underlying,
-          syntheticModule.cursor,
-          synthetic.name
-        ),
-      ]);
+      switch (synthetic.kind) {
+        case "anonymous": {
+          syntheticModule.declarations.push(
+            ...emitDeclaration(
+              rustCtx,
+              synthetic.underlying,
+              syntheticModule.cursor,
+              synthetic.name
+            )
+          );
+          break;
+        }
+        case "partialUnion": {
+          syntheticModule.declarations.push(
+            ...emitUnion(
+              rustCtx,
+              synthetic,
+              syntheticModule.cursor,
+              synthetic.name
+            )
+          );
+          break;
+        }
+      }
     }
   }
+
+  const pathToServiceNamespace = rootModule.cursor.pathTo(
+    createOrGetModuleForNamespace(rustCtx, service.type).cursor
+  );
+
+  rootModule.declarations.push([
+    "#[allow(unused_imports)]",
+    `pub use ${pathToServiceNamespace}::*;`,
+  ]);
 
   try {
     const stat = await context.program.host.stat(context.emitterOutputDir);
@@ -175,6 +223,6 @@ export async function $onEmit(context: EmitContext<RustEmitterOptions>) {
     rustCtx,
     context.emitterOutputDir,
     rootModule,
-    context.options["output-mode"]
+    context.options["output-mode"] ?? DEFAULT_OUTPUT_MODE
   );
 }

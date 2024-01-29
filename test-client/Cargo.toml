@@ -1,0 +1,16 @@
+[package]
+name = "test-client"
+version = "0.1.0"
+edition = "2021"
+default-run = "test-client"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+tsp_rust = { path = "../tsp_rust", features = ["http"] }
+tokio = { version = "1", features = ["full"] }
+hyper = { version = "1", features = ["full"] }
+hyper-util = { version = "0.1", features = ["full"] }
+http-body-util = "0.1"
+
+actix-web = "4"

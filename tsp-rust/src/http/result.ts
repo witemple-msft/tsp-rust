@@ -12,7 +12,10 @@ import { ModelProperty, isErrorModel } from "@typespec/compiler";
 import { indent } from "../util/indent.js";
 import { ReCase, parseCase } from "../util/case.js";
 import { emitTypeReference } from "../common/reference.js";
-import { referencePath, vendoredModulePath } from "../util/vendored.js";
+import {
+  referenceHostPath,
+  referenceVendoredHostPath,
+} from "../util/vendored.js";
 import { KEYWORDS } from "../common/keywords.js";
 
 export interface ResultInfo {
@@ -153,7 +156,7 @@ export function createResultInfo(
 
     if (isError && errorExtrinsicResponse) {
       // prettier-ignore
-      output.push(`    Err(${referencePath("OperationError", "Service")}(${exprOrPattern}, result::${errorExtrinsicResponse.typeName}::from_response(res).await)`);
+      output.push(`    Err(${referenceHostPath("OperationError", "Service")}(${exprOrPattern}, result::${errorExtrinsicResponse.typeName}::from_response(res).await)`);
     } else if (!isError && successExtrinsicResponse) {
       // prettier-ignore
       output.push(`    Ok(response::${successExtrinsicResponse.typeName}::from_response(res).await)`);
@@ -183,7 +186,7 @@ export function createResultInfo(
   if (!isExhaustive) {
     output.push("  status => {");
     // prettier-ignore
-    output.push(`    Err(${referencePath("OperationError", "UnexpectedStatus")}(status, res))`);
+    output.push(`    Err(${referenceHostPath("OperationError", "UnexpectedStatus")}(status, res))`);
     output.push("  },");
   }
 
@@ -202,7 +205,7 @@ export function createResultInfo(
         )
       : "()";
 
-  const returnType = referencePath(
+  const returnType = referenceHostPath(
     `OperationResult<${successTypeReference}, ${errorTypeReference}>`
   );
 
@@ -250,43 +253,46 @@ function* emitResultProcessingCode(
 
     const bodyTypeReference = hasHeaderFields
       ? // prettier-ignore
-        `<${returnTypeReference} as ${referencePath("FromResponseParts")}>::Body`
+        `<${returnTypeReference} as ${referenceHostPath("FromResponseParts")}>::Body`
       : returnTypeReference;
 
     if (hasHeaderFields) {
       yield "let headers = {";
-      yield `  use ${referencePath("FromHeaders")};`;
+      yield `  use ${referenceHostPath("FromHeaders")};`;
       // prettier-ignore
-      yield `  <${returnTypeReference} as ${referencePath("FromResponseParts")}>::Headers::from_headers(res.headers())`;
+      yield `  <${returnTypeReference} as ${referenceHostPath("FromResponseParts")}>::Headers::from_headers(res.headers())`;
       yield "};";
       yield "";
     }
 
     yield `let text = res.text().await?;`;
-    yield `${vendoredModulePath("log", "debug")}!("Response body: {}", text);`;
+    yield `${referenceVendoredHostPath(
+      "log",
+      "debug"
+    )}!("Response body: {}", text);`;
     // prettier-ignore
-    yield `let body = ${vendoredModulePath("serde_json", "from_str")}::<${bodyTypeReference}>(&text)?;`;
+    yield `let body = ${referenceVendoredHostPath("serde_json", "from_str")}::<${bodyTypeReference}>(&text)?;`;
     yield "";
 
     let valReference = "body";
 
     if (hasHeaderFields) {
       // prettier-ignore
-      yield `let result = <${returnTypeReference} as ${referencePath("FromResponseParts")}>::from_response_parts(body, headers);`;
+      yield `let result = <${returnTypeReference} as ${referenceHostPath("FromResponseParts")}>::from_response_parts(body, headers);`;
 
       valReference = "result";
     }
 
     // prettier-ignore
     if (error) {
-      yield `Err(${referencePath("OperationError", "Service")}(${exprOrPattern}, ${valReference}))`;
+      yield `Err(${referenceHostPath("OperationError", "Service")}(${exprOrPattern}, ${valReference}))`;
     } else {
       yield `Ok(${valReference})`;
     }
   } else {
     if (error) {
       // prettier-ignore
-      yield `Err(${referencePath("OperationError", "Service")}(${exprOrPattern}, ()))`;
+      yield `Err(${referenceHostPath("OperationError", "Service")}(${exprOrPattern}, ()))`;
     } else {
       yield "Ok(())";
     }
@@ -316,7 +322,7 @@ function synthesizeResponseWithHeaders(
   const implLines: string[] = [
     `impl ${typeName} {`,
     // prettier-ignore
-    `  pub async fn from_response(res: ${vendoredModulePath("reqwest", "Response")}) -> Self {`,
+    `  pub async fn from_response(res: ${referenceVendoredHostPath("reqwest", "Response")}) -> Self {`,
     "    Self {",
   ];
 
@@ -377,15 +383,15 @@ function synthesizeResponseWithHeaders(
       implLines.push(
         `      ${bodyFieldName}: async move {`,
         "        let headers = {",
-        `          use ${referencePath("FromHeaders")};`,
+        `          use ${referenceHostPath("FromHeaders")};`,
         //prettier-ignore
-        `            <${bodyTypeReference} as ${referencePath("FromResponseParts")}>::Headers::from_headers(res.headers())`,
+        `            <${bodyTypeReference} as ${referenceHostPath("FromResponseParts")}>::Headers::from_headers(res.headers())`,
         "        };",
         "",
         `        let body = res.json::<${bodyTypeReference}>().await?;`,
         "",
         // prettier-ignore
-        `        <${bodyTypeReference} as ${referencePath("FromResponseParts")}>::from_response_parts(body, headers)`,
+        `        <${bodyTypeReference} as ${referenceHostPath("FromResponseParts")}>::from_response_parts(body, headers)`,
         "      }.await"
       );
     }

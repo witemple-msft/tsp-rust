@@ -5,7 +5,10 @@ import { parseCase } from "../util/case.js";
 import { RustContext } from "../ctx.js";
 import { indent } from "../util/indent.js";
 import { emitHttpOperations } from "../http/operation.js";
-import { referencePath, vendoredModulePath } from "../util/vendored.js";
+import {
+  referenceHostPath,
+  referenceVendoredHostPath,
+} from "../util/vendored.js";
 import { emitDeclarations } from "./declaration.js";
 import { emitOptions } from "../http/options.js";
 import { getServerDescription } from "../http/server.js";
@@ -50,8 +53,10 @@ export function emitRust(ctx: EmitContext, service: HttpService): string {
 
     options: [],
 
+    rootModule: undefined as any,
     baseNamespace: service.namespace,
     namespaceModules: new Map(),
+    syntheticUnions: new Set(),
   };
 
   const auth = generateAuth(rustCtx);
@@ -83,9 +88,9 @@ export function emitRust(ctx: EmitContext, service: HttpService): string {
     "}",
     "",
     "pub mod http {",
-    `  use ${referencePath("QueryString")};`,
-    `  use ${referencePath("HeaderMap")};`,
-    `  use ${vendoredModulePath("itertools", "Itertools")};`,
+    `  use ${referenceHostPath("QueryString")};`,
+    `  use ${referenceHostPath("HeaderMap")};`,
+    `  use ${referenceVendoredHostPath("itertools", "Itertools")};`,
     "",
     "  pub mod service_info {",
     `    pub const TITLE: &str = "${title ?? ""}";`,
@@ -96,7 +101,7 @@ export function emitRust(ctx: EmitContext, service: HttpService): string {
     "  #[non_exhaustive]",
     `  pub struct ${contextTypeName} {`,
     // prettier-ignore
-    `    client: ${vendoredModulePath("reqwest", "Client")},`,
+    `    client: ${referenceVendoredHostPath("reqwest", "Client")},`,
     "    pub base_url: String,",
     ...indent(indent(auth.config_lines)),
     "  }",
@@ -109,7 +114,7 @@ export function emitRust(ctx: EmitContext, service: HttpService): string {
     `  impl ${contextTypeName} {`,
     `    pub fn new(init: ${contextTypeName}Init) -> Self {`,
     `      Self {`,
-    `        client: ${vendoredModulePath("reqwest", "Client")}::new(),`,
+    `        client: ${referenceVendoredHostPath("reqwest", "Client")}::new(),`,
     `        base_url: init.base_url,`,
     ...auth.fields.map((field) => `        ${field}: init.${field},`),
     `      }`,

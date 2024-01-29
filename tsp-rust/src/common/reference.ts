@@ -5,12 +5,14 @@ import {
   getEffectiveModelType,
   IntrinsicType,
   Namespace,
+  UnionVariant,
 } from "@typespec/compiler";
 import { PathCursor, RustContext } from "../ctx.js";
 import { RustTranslation, getRustScalar } from "./scalar.js";
-import { vendoredModulePath } from "../util/vendored.js";
+import { referenceVendoredHostPath } from "../util/vendored.js";
 import { emitWellKnownModel, isWellKnownModel } from "./model.js";
 import { parseCase } from "../util/case.js";
+import { createOrGetModuleForNamespace } from "./namespace.js";
 
 export type NamespacedType = Extract<Type, { namespace?: Namespace }>;
 
@@ -45,11 +47,12 @@ export function emitTypeReference(
 
         // Anonymous model, synthesize a new model with the preferredName
         ctx.synthetics.push({
+          kind: "anonymous",
           name: preferredAlternativeName,
           underlying: effectiveModel,
         });
 
-        const name = cursor.resolveAbsolutePath(
+        const name = cursor.resolveAbsolutePathOld(
           "models",
           "synthetic",
           preferredAlternativeName
@@ -73,7 +76,18 @@ export function emitTypeReference(
           : effectiveModel.name
       );
 
-      return cursor.resolveAbsolutePath("models", templatedName.pascalCase);
+      if (!effectiveModel.namespace) {
+        throw new Error(
+          "UNREACHABLE: no parent namespace of named model in emitTypeReference"
+        );
+      }
+
+      const parentModule = createOrGetModuleForNamespace(
+        ctx,
+        effectiveModel.namespace
+      );
+
+      return cursor.pathTo(parentModule.cursor, templatedName.pascalCase);
     }
     case "Union": {
       if (type.name === "" || type.name === undefined) {
@@ -82,11 +96,12 @@ export function emitTypeReference(
         }
 
         ctx.synthetics.push({
+          kind: "anonymous",
           name: preferredAlternativeName,
           underlying: type,
         });
 
-        const name = cursor.resolveAbsolutePath(
+        const name = cursor.resolveAbsolutePathOld(
           "models",
           "synthetic",
           preferredAlternativeName
@@ -99,12 +114,12 @@ export function emitTypeReference(
         ctx.typeQueue.add(type);
       }
 
-      return cursor.resolveAbsolutePath("models", type.name);
+      return cursor.resolveAbsolutePathOld("models", type.name);
     }
     case "Enum": {
       ctx.typeQueue.add(type);
 
-      return cursor.resolveAbsolutePath("models", type.name);
+      return cursor.resolveAbsolutePathOld("models", type.name);
     }
     case "Number":
     case "String":
@@ -122,7 +137,7 @@ export function emitTypeReference(
           return `compile_error!("encountered 'ErrorType' in model graph")`;
         case "unknown":
           // TODO: assumes JSON
-          return vendoredModulePath("serde_json", "Value");
+          return referenceVendoredHostPath("serde_json", "Value");
         default:
           return `compile_error!("encountered unknown intrinsic type '${
             (type satisfies never as IntrinsicType).name
@@ -131,6 +146,34 @@ export function emitTypeReference(
     default:
       throw new Error(`UNREACHABLE: ${type.kind}`);
   }
+}
+
+export function emitSyntheticUnionReference(
+  ctx: RustContext,
+  variants: UnionVariant[],
+  cursor: PathCursor,
+  preferredAlternativeName: string
+): string {
+  const targetCursor = ctx.rootModule.cursor.enter("models", "synthetic");
+  const absolutePath = targetCursor
+    .enter(preferredAlternativeName)
+    .path.join("::");
+
+  const reference = cursor.pathTo(targetCursor, preferredAlternativeName);
+
+  if (ctx.syntheticUnions.has(absolutePath)) {
+    return reference;
+  }
+
+  ctx.synthetics.push({
+    kind: "partialUnion",
+    name: preferredAlternativeName,
+    variants,
+  });
+
+  ctx.syntheticUnions.add(absolutePath);
+
+  return reference;
 }
 
 export function isValueLiteralType(t: Type): boolean {

@@ -6,7 +6,14 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [features]
-http = ["dep:reqwest", "dep:http", "dep:tower"]
+http = [
+    "dep:reqwest",
+    "dep:http",
+    "dep:tower",
+    "dep:http-body",
+    "dep:bytes",
+    "dep:http-body-util",
+]
 
 [dependencies]
 thiserror = "1"
@@ -16,11 +23,15 @@ serde_with = { version = "3", features = ["std", "chrono_0_4"] }
 serde = { version = "1", features = ["serde_derive"] }
 chrono = { version = "0.4", features = ["serde"] }
 itertools = "0.12"
-bigdecimal = "0.4"
+bigdecimal = { version = "0.4", features = ["serde"] }
 tempdir = "0.3"
 linkme = "0.3"
+futures = "0.3"
 
 # HTTP dependencies
 http = { version = "1", optional = true }
+http-body = { version = "1", optional = true }
+http-body-util = { version = "0.1", optional = true }
 reqwest = { version = "0.11", features = ["json"], optional = true }
 tower = { version = "0.4", optional = true }
+bytes = { version = "1", optional = true }

@@ -20,5 +20,5 @@ emit:
 options:
   "tsp-rust":
     features:
-      - "http"
+      http: {}
     "output-mode": "module"

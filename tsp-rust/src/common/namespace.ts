@@ -4,12 +4,10 @@ import {
   ModuleBodyDeclaration,
   RustContext,
   RustDeclarationType,
-  createPathCursor,
 } from "../ctx.js";
 import { indent } from "../util/indent.js";
 import { isIterable, join } from "../util/iter.js";
-import { emitOperationGroup } from "./interface.js";
-import { getFullyQualifiedNamespacePath } from "../util/name.js";
+import { ERROR_FRAGMENT, emitOperationGroup } from "./interface.js";
 import { parseCase } from "../util/case.js";
 import { OnceQueue } from "../util/onceQueue.js";
 import { emitDocumentation } from "./documentation.js";
@@ -49,7 +47,8 @@ export function visitAllTypes(ctx: RustContext, namespace: Namespace) {
       // prettier-ignore
       `/// A trait representing the operations defined in the '${getNamespaceFullName(namespace)}' namespace.`,
       `pub trait ${parseCase(namespace.name).pascalCase} {`,
-      ...emitOperationGroup(ctx, operations.values(), module.cursor),
+      ...indent(ERROR_FRAGMENT),
+      ...emitOperationGroup(ctx, operations.values(), parentModule.cursor),
       "}",
     ]);
   }
@@ -116,17 +115,19 @@ function* emitModuleBodyDeclaration(
   } else if (typeof decl === "string") {
     yield decl;
   } else {
-    const declLine = formatModuleDeclaration(decl);
+    if (decl.declarations.length > 0) {
+      const declLine = formatModuleDeclaration(decl);
 
-    if (decl.namespace) yield* emitDocumentation(ctx, decl.namespace);
+      if (decl.namespace) yield* emitDocumentation(ctx, decl.namespace);
 
-    if (forceInline || decl.inline) {
-      yield `${declLine} {`;
-      yield* indent(emitModuleBody(ctx, decl, true, queue));
-      yield "}";
-    } else {
-      queue.add(decl);
-      yield declLine + ";";
+      if (forceInline || decl.inline) {
+        yield `${declLine} {`;
+        yield* indent(emitModuleBody(ctx, decl, true, queue));
+        yield "}";
+      } else {
+        queue.add(decl);
+        yield declLine + ";";
+      }
     }
   }
 }

@@ -7,6 +7,7 @@ import {
   Scalar,
   Service,
   Union,
+  UnionVariant,
 } from "@typespec/compiler";
 import {
   HttpOperationParameter,
@@ -43,13 +44,24 @@ export interface RustContext {
   options: OptionsStructDefinition[];
 
   // new stuff
+  rootModule: Module;
   baseNamespace: Namespace;
   namespaceModules: Map<Namespace, Module>;
+  syntheticUnions: Set<string>;
 }
 
-export interface Synthetic {
+export type Synthetic = AnonymousSynthetic | PartialUnionSynthetic;
+
+export interface AnonymousSynthetic {
+  kind: "anonymous";
   name: string;
   underlying: RustDeclarationType;
+}
+
+export interface PartialUnionSynthetic {
+  kind: "partialUnion";
+  name: string;
+  variants: UnionVariant[];
 }
 
 export interface OptionsStructDefinition {
@@ -90,7 +102,9 @@ export interface PathCursor {
   readonly synthetic: string;
 
   enter(...path: string[]): PathCursor;
-  resolveAbsolutePath(...other: string[]): string;
+  /** @deprecated use pathTo instead */
+  resolveAbsolutePathOld(...other: string[]): string;
+  pathTo(other: PathCursor, childItem?: string): string;
 }
 
 const MODELS_PATH = ["models"];
@@ -101,11 +115,11 @@ export function createPathCursor(...base: string[]): PathCursor {
     path: base,
 
     get models() {
-      return self.resolveAbsolutePath(...MODELS_PATH);
+      return self.resolveAbsolutePathOld(...MODELS_PATH);
     },
 
     get synthetic() {
-      return self.resolveAbsolutePath(...SYNTHETIC_PATH);
+      return self.resolveAbsolutePathOld(...SYNTHETIC_PATH);
     },
 
     enter(...path: string[]) {
@@ -114,7 +128,13 @@ export function createPathCursor(...base: string[]): PathCursor {
 
     // Should resolve using path logic, like path.resolve. If paths have a common prefix, it should be removed and
     // instead of ".." relative paths, the Rust path syntax uses "super".
-    resolveAbsolutePath(...absolute: string[]) {
+    /**
+     *
+     * @deprecated
+     * @param absolute
+     * @returns
+     */
+    resolveAbsolutePathOld(...absolute: string[]) {
       const commonPrefix = getCommonPrefix(self.path, absolute);
 
       const outputPath = [];
@@ -133,9 +153,39 @@ export function createPathCursor(...base: string[]): PathCursor {
 
       return outPath;
     },
+
+    pathTo(other: PathCursor, childItem?: string): string {
+      const commonPrefix = getCommonPrefix(self.path, other.path);
+
+      const outputPath = [];
+
+      for (let i = 0; i < self.path.length - commonPrefix.length; i++) {
+        outputPath.push("super");
+      }
+
+      outputPath.push(...other.path.slice(commonPrefix.length));
+
+      const outPath = outputPath.join("::");
+
+      if (outPath === "" && !same(self, other)) {
+        throw new Error("Resolved empty module path");
+      }
+
+      return childItem !== undefined
+        ? outPath === ""
+          ? childItem
+          : outPath + "::" + childItem
+        : outPath;
+    },
   };
 
   return self;
+
+  function same(a: PathCursor, b: PathCursor): boolean {
+    return (
+      a.path.length === b.path.length && a.path.every((v, i) => v === b.path[i])
+    );
+  }
 }
 
 function getCommonPrefix(a: string[], b: string[]): string[] {

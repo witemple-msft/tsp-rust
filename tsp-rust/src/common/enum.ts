@@ -1,16 +1,16 @@
 import { Enum, getDoc } from "@typespec/compiler";
 import { RustContext } from "../ctx.js";
-import { vendoredModulePath } from "../util/vendored.js";
+import { referenceVendoredHostPath } from "../util/vendored.js";
 import { parseCase } from "../util/case.js";
 
 export function* emitEnum(ctx: RustContext, enum_: Enum): Iterable<string> {
   // It's a core compiler error for an enum not to have all its values be of the same type.
 
-  yield `#[derive(Debug, Clone, PartialEq, ${vendoredModulePath(
+  yield `#[derive(Debug, Clone, PartialEq, ${referenceVendoredHostPath(
     "serde",
     "Deserialize"
-  )}, ${vendoredModulePath("serde", "Serialize")})]`;
-  yield `#[serde(crate = "${vendoredModulePath("serde")}")]`;
+  )}, ${referenceVendoredHostPath("serde", "Serialize")})]`;
+  yield `#[serde(crate = "${referenceVendoredHostPath("serde")}")]`;
 
   const doc = getDoc(ctx.program, enum_);
   if (doc) yield `#[doc = ${JSON.stringify(doc)}]`;

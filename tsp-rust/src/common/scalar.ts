@@ -5,10 +5,10 @@ import {
   Scalar,
   formatDiagnostic,
 } from "@typespec/compiler";
-import { vendoredModulePath } from "../util/vendored.js";
+import { referenceVendoredHostPath } from "../util/vendored.js";
 import { reportDiagnostic } from "../lib.js";
 import { getFullyQualifiedTypeName } from "../util/name.js";
-import { PathCursor, RustContext } from "../ctx.js";
+import { RustContext } from "../ctx.js";
 import { parseCase } from "../util/case.js";
 
 export function emitScalar(ctx: RustContext, scalar: Scalar): string {
@@ -96,29 +96,29 @@ function createScalarsMap(program: Program): Map<Scalar, RustTranslation> {
     [program.resolveTypeReference("TypeSpec.integer"), copy("isize")],
     [
       program.resolveTypeReference("TypeSpec.plainDate"),
-      copy(vendoredModulePath("chrono", "naive", "NaiveDate")),
+      copy(referenceVendoredHostPath("chrono", "naive", "NaiveDate")),
     ],
     [
       program.resolveTypeReference("TypeSpec.plainTime"),
-      copy(vendoredModulePath("chrono", "naive", "NaiveTime")),
+      copy(referenceVendoredHostPath("chrono", "naive", "NaiveTime")),
     ],
     [
       program.resolveTypeReference("TypeSpec.utcDateTime"),
       copy(
-        vendoredModulePath(
+        referenceVendoredHostPath(
           "chrono",
-          `DateTime<${vendoredModulePath("chrono", "offset", "Utc")}>`
+          `DateTime<${referenceVendoredHostPath("chrono", "offset", "Utc")}>`
         )
       ),
     ],
     // [program.resolveTypeReference("TypeSpec.offsetDateTime"), copy(vendoredModulePath("chrono", "DateTime"))],
     [
       program.resolveTypeReference("TypeSpec.duration"),
-      copy(vendoredModulePath("chrono", "Duration")),
+      copy(referenceVendoredHostPath("chrono", "Duration")),
     ],
     [
       program.resolveTypeReference("TypeSpec.decimal"),
-      copy(vendoredModulePath("bigdecimal", "BigDecimal")),
+      copy(referenceVendoredHostPath("bigdecimal", "BigDecimal")),
     ],
   ] as const;
 

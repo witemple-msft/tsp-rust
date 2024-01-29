@@ -1,9 +1,17 @@
-import { HOST_PACKAGE } from "../lib.js";
+let HOST_PATH: string = "::tsp_rust";
 
-export function referencePath(...segments: string[]): string {
-  return "::" + [HOST_PACKAGE, ...segments].join("::");
+const VENDORED = "vendored";
+
+export function setHostPath(name: string): void {
+  HOST_PATH = name;
 }
 
-export function vendoredModulePath(...segments: string[]): string {
-  return referencePath("vendored", ...segments);
+export function referenceHostPath(...segments: string[]): string {
+  if (segments.length === 0) {
+    return HOST_PATH;
+  } else return HOST_PATH + "::" + segments.join("::");
+}
+
+export function referenceVendoredHostPath(...segments: string[]): string {
+  return referenceHostPath(VENDORED, ...segments);
 }

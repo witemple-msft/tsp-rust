@@ -3,42 +3,36 @@ import {
   createTypeSpecLibrary,
   paramMessage,
 } from "@typespec/compiler";
-
-// TODO: don't want this to be hard coded but overridable in options
-export const HOST_PACKAGE = "tsp_rust";
+import { RustEmitterFeatureOptionsSchema } from "./feature.js";
 
 export type RustEmitterOutputMode = "directory" | "module";
 
-export type RustEmitterFeature = "http";
-
 export interface RustEmitterOptions {
-  "tsp-rust-crate": string;
-  "output-mode": RustEmitterOutputMode;
-  features: RustEmitterFeature[];
+  "crate-path"?: string;
+  "output-mode"?: RustEmitterOutputMode;
+  features: RustEmitterFeature;
   "omit-unreachable-types": boolean;
 }
+
+export const DEFAULT_OUTPUT_MODE: RustEmitterOutputMode = "directory";
+export const DEFAULT_CRATE_PATH = "::tsp_rust";
 
 const EmitterOptionsSchema: JSONSchemaType<RustEmitterOptions> = {
   type: "object",
   additionalProperties: false,
   properties: {
-    "tsp-rust-crate": {
+    "crate-path": {
       type: "string",
-      default: "::tsp_rust",
+      default: DEFAULT_CRATE_PATH,
+      nullable: true,
     },
     "output-mode": {
       type: "string",
       enum: ["directory", "module"],
-      default: "directory",
+      default: DEFAULT_OUTPUT_MODE,
+      nullable: true,
     },
-    features: {
-      type: "array",
-      items: {
-        type: "string",
-        enum: ["http"],
-      },
-      default: [],
-    },
+    features: RustEmitterFeatureOptionsSchema,
     "omit-unreachable-types": {
       type: "boolean",
       default: false,
