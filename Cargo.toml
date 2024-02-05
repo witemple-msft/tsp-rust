@@ -1,3 +1,12 @@
 [workspace]
 resolver = "2"
 members = ["tsp_rust", "test-client"]
+
+[workspace.lints.clippy]
+disallowed_names = "allow"
+
+[profile.release]
+lto = true
+opt-level = "s"
+codegen-units = 1
+strip = true

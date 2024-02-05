@@ -1,4 +1,10 @@
-import { Interface, Operation, Type, isErrorModel } from "@typespec/compiler";
+import {
+  Interface,
+  Operation,
+  Type,
+  UnionVariant,
+  isErrorModel,
+} from "@typespec/compiler";
 import { RustContext, PathCursor } from "../ctx.js";
 import { parseCase } from "../util/case.js";
 import { getAllProperties } from "../util/extends.js";
@@ -14,7 +20,7 @@ import { bifilter } from "../util/bifilter.js";
 
 export const ERROR_FRAGMENT = [
   "/// The error type which may be returned by this trait's operations.",
-  "type Error<OperationError>;",
+  "type Error<OperationError>: std::error::Error + Send + Sync + 'static;",
   "",
 ];
 
@@ -62,9 +68,9 @@ export function* emitOperation(
     opNameCase.pascalCase
   );
 
-  const returnType = `impl ${referenceHostPath(
-    "OperationFuture"
-  )}<${successResult}, Self::Error<${errorResult}>>`;
+  const returnType = `impl ${referenceHostPath("OperationFuture")}<${
+    successResult.typeReference
+  }, Self::Error<${errorResult.typeReference}>>`;
 
   const params: string[] = [];
 
@@ -121,14 +127,35 @@ export function* emitOperation(
   }
 }
 
-const DEFAULT_NO_VARIANT_RETURN_TYPE = "::core::convert::Infallible";
+export interface SplitReturnTypeCommon {
+  typeReference: string;
+  target: Type | [PathCursor, string] | undefined;
+}
 
-function splitReturnType(
+export interface OrdinarySplitReturnType extends SplitReturnTypeCommon {
+  kind: "ordinary";
+}
+
+export interface UnionSplitReturnType extends SplitReturnTypeCommon {
+  kind: "union";
+  variants: UnionVariant[];
+}
+
+export type SplitReturnType = OrdinarySplitReturnType | UnionSplitReturnType;
+
+const DEFAULT_NO_VARIANT_RETURN_TYPE = "::core::convert::Infallible";
+const DEFAULT_NO_VARIANT_SPLIT: SplitReturnType = {
+  kind: "ordinary",
+  typeReference: DEFAULT_NO_VARIANT_RETURN_TYPE,
+  target: undefined,
+};
+
+export function splitReturnType(
   ctx: RustContext,
   type: Type,
   cursor: PathCursor,
   altBaseName: string
-): [string, string] {
+): [SplitReturnType, SplitReturnType] {
   const successAltName = altBaseName + "Response";
   const errorAltName = altBaseName + "ErrorResponse";
 
@@ -152,6 +179,7 @@ function splitReturnType(
             )
           : emitSyntheticUnionReference(
               ctx,
+              type,
               successVariants,
               cursor,
               successAltName
@@ -171,38 +199,78 @@ function splitReturnType(
             )
           : emitSyntheticUnionReference(
               ctx,
+              type,
               errorVariants,
               cursor,
               errorAltName
             );
 
-    return [successTypeReference, errorTypeReference];
+    const successSplit: SplitReturnType =
+      successVariants.length > 1
+        ? {
+            kind: "union",
+            variants: successVariants,
+            typeReference: successTypeReference,
+            target: cursor.resolveRelativeItemPath(successTypeReference),
+          }
+        : {
+            kind: "ordinary",
+            typeReference: successTypeReference,
+            target: successVariants[0].type,
+          };
+
+    const errorSplit: SplitReturnType =
+      errorVariants.length > 1
+        ? {
+            kind: "union",
+            variants: errorVariants,
+            typeReference: errorTypeReference,
+            target: cursor.resolveRelativeItemPath(errorTypeReference),
+          }
+        : {
+            kind: "ordinary",
+            typeReference: errorTypeReference,
+            target: errorVariants[0].type,
+          };
+
+    return [successSplit, errorSplit];
   } else {
     // No splitting, just figure out if the type is an error type or not and make the other infallible.
 
     if (isErrorModel(ctx.program, type)) {
+      const typeReference = emitTypeReference(
+        ctx,
+        type,
+        type,
+        "owned",
+        cursor,
+        altBaseName + "ErrorResponse"
+      );
+
       return [
-        DEFAULT_NO_VARIANT_RETURN_TYPE,
-        emitTypeReference(
-          ctx,
-          type,
-          type,
-          "owned",
-          cursor,
-          altBaseName + "ErrorResponse"
-        ),
+        DEFAULT_NO_VARIANT_SPLIT,
+        {
+          kind: "ordinary",
+          typeReference,
+          target: type,
+        },
       ];
     } else {
+      const typeReference = emitTypeReference(
+        ctx,
+        type,
+        type,
+        "owned",
+        cursor,
+        altBaseName + "SuccessResponse"
+      );
       return [
-        emitTypeReference(
-          ctx,
-          type,
-          type,
-          "owned",
-          cursor,
-          altBaseName + "SuccessResponse"
-        ),
-        DEFAULT_NO_VARIANT_RETURN_TYPE,
+        {
+          kind: "ordinary",
+          typeReference,
+          target: type,
+        },
+        DEFAULT_NO_VARIANT_SPLIT,
       ];
     }
   }

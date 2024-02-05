@@ -25,6 +25,7 @@ export interface RustTranslation {
   owned: string;
   borrowed: string;
   param: string;
+  paramTemplate: string;
 }
 
 function copy(owned: string): RustTranslation {
@@ -32,6 +33,7 @@ function copy(owned: string): RustTranslation {
     owned,
     borrowed: owned,
     param: owned,
+    paramTemplate: "{}",
   };
 }
 
@@ -44,14 +46,21 @@ function ob(owned: string, borrowed: string): RustTranslation {
     owned,
     borrowed,
     param: borrowed,
+    paramTemplate: "{}",
   };
 }
 
-function obp(owned: string, borrowed: string, param: string): RustTranslation {
+function obp(
+  owned: string,
+  borrowed: string,
+  param: string,
+  paramTemplate: string
+): RustTranslation {
   return {
     owned,
     borrowed,
     param,
+    paramTemplate,
   };
 }
 
@@ -70,16 +79,17 @@ function createScalarsMap(program: Program): Map<Scalar, RustTranslation> {
   const entries = [
     [
       program.resolveTypeReference("TypeSpec.bytes"),
-      obp("Vec<u8>", "&[u8]", "impl AsRef<[u8]>"),
+      obp(
+        "Vec<u8>",
+        "&[u8]",
+        `impl ${referenceVendoredHostPath("futures", "AsyncRead")} + Send`,
+        "{}"
+      ),
     ],
     [program.resolveTypeReference("TypeSpec.boolean"), copy("bool")],
-    // [
-    //   program.resolveTypeReference("TypeSpec.string"),
-    //   obp("String", "&str", "impl Into<String>"),
-    // ],
     [
       program.resolveTypeReference("TypeSpec.string"),
-      obp("String", "&str", "impl AsRef<str>"),
+      obp("String", "&str", "impl AsRef<str> + Send", "{}.as_ref()"),
     ],
     // [program.resolveTypeReference("TypeSpec.usize"), copy("usize")],
     // [program.resolveTypeReference("TypeSpec.isize"), copy("isize")],
@@ -93,6 +103,8 @@ function createScalarsMap(program: Program): Map<Scalar, RustTranslation> {
     [program.resolveTypeReference("TypeSpec.uint8"), copy("u8")],
     [program.resolveTypeReference("TypeSpec.float32"), copy("f32")],
     [program.resolveTypeReference("TypeSpec.float64"), copy("f64")],
+
+    // TODO: bigint
     [program.resolveTypeReference("TypeSpec.integer"), copy("isize")],
     [
       program.resolveTypeReference("TypeSpec.plainDate"),

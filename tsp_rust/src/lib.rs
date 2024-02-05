@@ -42,11 +42,13 @@ pub mod http {
 
     pub mod vendored {
         pub use bytes;
+        pub use eyes;
         pub use http;
         pub use http_body;
         pub use http_body_util;
         pub use reqwest;
         pub use tower;
+        pub use url;
     }
 
     pub trait Service<ResponseBody: http_body::Body>:
@@ -59,14 +61,16 @@ pub mod http {
     }
 
     pub type Body =
-        StreamBody<Pin<Box<dyn Stream<Item = Result<Frame<Bytes>, Infallible>> + Send>>>;
+        StreamBody<Pin<Box<dyn Stream<Item = Result<Frame<Bytes>, Infallible>> + Send + Sync>>>;
 
     pub enum Error<Body: http_body::Body, ServiceError, OperationError> {
+        Serialize(serde_json::Error),
         Deserialize(serde_json::Error),
         Body(Body::Error),
         Service(ServiceError),
         Operation(OperationError),
-        UnexpectedStatus(http::Response<Body>),
+        UnexpectedStatus(u16, http::response::Parts),
+        UnexpectedContentType(Option<String>, http::response::Parts),
     }
 
     pub async fn send_request<ResponseBody: http_body::Body, S: Service<ResponseBody>, E>(
@@ -78,6 +82,12 @@ pub mod http {
             .map_err(Error::Service)?;
 
         service.call(request).await.map_err(Error::Service)
+    }
+
+    pub fn serialize_json_body<T: serde::Serialize>(body: T) -> Result<Body, serde_json::Error> {
+        let data = serde_json::to_vec(&body)?;
+        let stream = futures::stream::once(futures::future::ready(Ok(Frame::data(data.into()))));
+        Ok(StreamBody::new(Box::pin(stream)))
     }
 
     pub async fn deserialize_body<
@@ -95,46 +105,89 @@ pub mod http {
         serde_json::from_slice(&data).map_err(Error::Deserialize)
     }
 
-    pub trait QueryString {
-        fn query_string(&self) -> String;
+    pub async fn deserialize_body_server<
+        T: for<'a> Deserialize<'a>,
+        Body: http_body::Body,
+        OperationError: std::error::Error,
+    >(
+        body: Body,
+    ) -> Result<T, ServerError<Body, OperationError>> {
+        use http_body_util::BodyExt;
+
+        let data = body.collect().await.map_err(ServerError::Body)?.to_bytes();
+
+        serde_json::from_slice(&data).map_err(ServerError::Deserialize)
     }
 
-    pub trait HeaderMap {
-        fn header_map(&self) -> reqwest::header::HeaderMap;
+    // TODO: return a result instead of panicking in FromParts/FromResponse
+    pub trait FromParts {
+        fn from_parts(parts: http::response::Parts) -> Self;
     }
 
-    pub type OperationResult<Body, Error> = Result<Body, OperationError<Error>>;
-
-    pub trait FromHeaders {
-        // TODO: should return a Result
-        fn from_headers(headers: &reqwest::header::HeaderMap) -> Self;
+    pub trait FromResponse<Body> {
+        fn from_response(body: Body, parts: http::response::Parts) -> Self;
     }
 
-    pub trait FromResponseParts {
-        type Body: serde::de::DeserializeOwned;
-        type Headers: FromHeaders;
-
-        // TODO: should return a Result
-        fn from_response_parts(body: Self::Body, headers: Self::Headers) -> Self;
+    pub enum ServerError<B: http_body::Body, OperationError: std::error::Error> {
+        InvalidRequest,
+        Operation(OperationError),
+        Serialize(serde_json::Error),
+        Deserialize(serde_json::Error),
+        Body(B::Error),
     }
 
-    pub struct OperationResponse<Body> {
-        pub body: Body,
-        pub headers: reqwest::header::HeaderMap,
+    impl<B: http_body::Body, OperationError: std::error::Error> std::fmt::Debug
+        for ServerError<B, OperationError>
+    {
+        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+            match self {
+                Self::InvalidRequest => write!(f, "InvalidRequest"),
+                Self::Operation(arg0) => f.debug_tuple("Operation").field(arg0).finish(),
+                Self::Serialize(arg0) => f.debug_tuple("Serialize").field(arg0).finish(),
+                Self::Deserialize(arg0) => f.debug_tuple("Deserialize").field(arg0).finish(),
+                Self::Body(_) => f.debug_tuple("Body").finish(),
+            }
+        }
     }
 
-    #[derive(thiserror::Error, Debug)]
-    pub enum OperationError<E: core::fmt::Debug> {
-        #[error("Service error {0}: {1:?}")]
-        Service(u16, E),
-        #[error("Unexpected status code {0}: {1:?}")]
-        UnexpectedStatus(u16, reqwest::Response),
-        #[error(transparent)]
-        Transport(#[from] reqwest::Error),
-        #[error(transparent)]
-        Json(#[from] serde_json::Error),
-        #[error("Unknown error: {0:?}")]
-        Unknown(Box<dyn std::error::Error + Send + Sync + 'static>),
+    impl<B: http_body::Body, OperationError: std::error::Error> std::error::Error
+        for ServerError<B, OperationError>
+    where
+        B::Error: std::error::Error,
+    {
+    }
+
+    impl<B: http_body::Body, OperationError: std::error::Error> core::fmt::Display
+        for ServerError<B, OperationError>
+    where
+        B::Error: std::fmt::Display,
+    {
+        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+            match self {
+                ServerError::InvalidRequest => write!(f, "Invalid request"),
+                ServerError::Operation(err) => write!(f, "Operation error: {}", err),
+                ServerError::Serialize(err) => write!(f, "Serialize error: {}", err),
+                ServerError::Deserialize(err) => write!(f, "Deserialize error: {}", err),
+                ServerError::Body(err) => write!(f, "Body error: {}", err),
+            }
+        }
+    }
+
+    pub trait Responder {
+        fn to_response<B: http_body::Body, E: std::error::Error>(
+            self,
+        ) -> Result<http::Response<Body>, ServerError<B, E>>;
+    }
+
+    impl<T: Responder, E: Responder> Responder for Result<T, E> {
+        fn to_response<B: http_body::Body, Err: std::error::Error>(
+            self,
+        ) -> Result<http::Response<Body>, ServerError<B, Err>> {
+            match self {
+                Ok(t) => t.to_response(),
+                Err(e) => e.to_response(),
+            }
+        }
     }
 }
 

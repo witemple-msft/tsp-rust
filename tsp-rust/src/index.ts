@@ -6,7 +6,12 @@ import {
   DEFAULT_OUTPUT_MODE,
   RustEmitterOptions,
 } from "./lib.js";
-import { Module, RustContext, createPathCursor } from "./ctx.js";
+import {
+  Module,
+  RustContext,
+  completePendingDeclarations,
+  createPathCursor,
+} from "./ctx.js";
 import { parseCase } from "./util/case.js";
 import {
   createOrGetModuleForNamespace,
@@ -115,6 +120,7 @@ export async function $onEmit(context: EmitContext<RustEmitterOptions>) {
     baseNamespace: service.type,
     namespaceModules: new Map([[globalNamespace, allModule]]),
     syntheticUnions: new Set(),
+    syntheticModule,
   };
 
   // Find the root of the service module and recursively reconstruct a path to it, adding the definitions along the way.
@@ -154,52 +160,7 @@ export async function $onEmit(context: EmitContext<RustEmitterOptions>) {
     visitAllTypes(rustCtx, service.type);
   }
 
-  // Add all pending declarations to the module tree.
-  while (!rustCtx.typeQueue.isEmpty() || rustCtx.synthetics.length > 0) {
-    while (!rustCtx.typeQueue.isEmpty()) {
-      const type = rustCtx.typeQueue.take()!;
-
-      if (!type.namespace) {
-        // TODO: when can this happen?
-        throw new UnimplementedError("no namespace for declaration type");
-      }
-
-      const module = createOrGetModuleForNamespace(rustCtx, type.namespace);
-
-      module.declarations.push([
-        ...emitDeclaration(rustCtx, type, module.cursor),
-      ]);
-    }
-
-    while (rustCtx.synthetics.length > 0) {
-      const synthetic = rustCtx.synthetics.shift()!;
-
-      switch (synthetic.kind) {
-        case "anonymous": {
-          syntheticModule.declarations.push(
-            ...emitDeclaration(
-              rustCtx,
-              synthetic.underlying,
-              syntheticModule.cursor,
-              synthetic.name
-            )
-          );
-          break;
-        }
-        case "partialUnion": {
-          syntheticModule.declarations.push(
-            ...emitUnion(
-              rustCtx,
-              synthetic,
-              syntheticModule.cursor,
-              synthetic.name
-            )
-          );
-          break;
-        }
-      }
-    }
-  }
+  completePendingDeclarations(rustCtx);
 
   const pathToServiceNamespace = rootModule.cursor.pathTo(
     createOrGetModuleForNamespace(rustCtx, service.type).cursor

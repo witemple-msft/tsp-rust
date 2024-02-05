@@ -16,6 +16,10 @@ import {
 } from "@typespec/http";
 import { parseCase } from "./util/case.js";
 import { OnceQueue } from "./util/onceQueue.js";
+import { emitDeclaration } from "./common/declaration.js";
+import { createOrGetModuleForNamespace } from "./common/namespace.js";
+import { emitUnion } from "./common/union.js";
+import { UnimplementedError } from "./util/error.js";
 
 export type RustVisibility =
   | "pub"
@@ -48,6 +52,7 @@ export interface RustContext {
   baseNamespace: Namespace;
   namespaceModules: Map<Namespace, Module>;
   syntheticUnions: Set<string>;
+  syntheticModule: Module;
 }
 
 export type Synthetic = AnonymousSynthetic | PartialUnionSynthetic;
@@ -67,6 +72,53 @@ export interface PartialUnionSynthetic {
 export interface OptionsStructDefinition {
   name: string;
   fields: HttpOperationParameter[];
+}
+
+export function completePendingDeclarations(ctx: RustContext): void {
+  // Add all pending declarations to the module tree.
+  while (!ctx.typeQueue.isEmpty() || ctx.synthetics.length > 0) {
+    while (!ctx.typeQueue.isEmpty()) {
+      const type = ctx.typeQueue.take()!;
+
+      if (!type.namespace) {
+        // TODO: when can this happen?
+        throw new UnimplementedError("no namespace for declaration type");
+      }
+
+      const module = createOrGetModuleForNamespace(ctx, type.namespace);
+
+      module.declarations.push([...emitDeclaration(ctx, type, module.cursor)]);
+    }
+
+    while (ctx.synthetics.length > 0) {
+      const synthetic = ctx.synthetics.shift()!;
+
+      switch (synthetic.kind) {
+        case "anonymous": {
+          ctx.syntheticModule.declarations.push(
+            ...emitDeclaration(
+              ctx,
+              synthetic.underlying,
+              ctx.syntheticModule.cursor,
+              synthetic.name
+            )
+          );
+          break;
+        }
+        case "partialUnion": {
+          ctx.syntheticModule.declarations.push(
+            ...emitUnion(
+              ctx,
+              synthetic,
+              ctx.syntheticModule.cursor,
+              synthetic.name
+            )
+          );
+          break;
+        }
+      }
+    }
+  }
 }
 
 // #region Module
@@ -101,10 +153,14 @@ export interface PathCursor {
   readonly models: string;
   readonly synthetic: string;
 
+  readonly parent: PathCursor | undefined;
+
   enter(...path: string[]): PathCursor;
   /** @deprecated use pathTo instead */
   resolveAbsolutePathOld(...other: string[]): string;
   pathTo(other: PathCursor, childItem?: string): string;
+  item(childItem: string): string;
+  resolveRelativeItemPath(path: string): [PathCursor, string];
 }
 
 const MODELS_PATH = ["models"];
@@ -120,6 +176,12 @@ export function createPathCursor(...base: string[]): PathCursor {
 
     get synthetic() {
       return self.resolveAbsolutePathOld(...SYNTHETIC_PATH);
+    },
+
+    get parent() {
+      return self.path.length === 0
+        ? undefined
+        : createPathCursor(...self.path.slice(0, -1));
     },
 
     enter(...path: string[]) {
@@ -176,6 +238,45 @@ export function createPathCursor(...base: string[]): PathCursor {
           ? childItem
           : outPath + "::" + childItem
         : outPath;
+    },
+
+    item(childItem: string): string {
+      const outPath = self.path.join("::");
+
+      return outPath === "" ? childItem : outPath + "::" + childItem;
+    },
+
+    resolveRelativeItemPath(path: string): [PathCursor, string] {
+      const parts = path.split("::");
+
+      let thisPath = [...self.path];
+
+      if (parts[0] === "") {
+        thisPath = [];
+        parts.shift();
+      }
+
+      for (const part of parts) {
+        switch (part) {
+          case "super":
+            if (thisPath.length === 0) {
+              throw new Error("Resolved path outside of root module");
+            }
+            thisPath.pop();
+            break;
+          default:
+            thisPath.push(part);
+        }
+      }
+
+      if (thisPath.length === 0) {
+        throw new Error("Resolved empty module path");
+      }
+
+      return [
+        createPathCursor(...thisPath.slice(0, -1)),
+        thisPath[thisPath.length - 1],
+      ];
     },
   };
 

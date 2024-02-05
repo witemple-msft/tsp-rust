@@ -3,6 +3,8 @@ import { parseCase } from "../util/case.js";
 import { RustContext } from "../ctx.js";
 import { referenceVendoredHostPath } from "../util/vendored.js";
 
+// TODO: whole module is dead code
+
 export interface AuthCode {
   fields: string[];
   config_lines: string[];

@@ -1,11 +1,14 @@
 import {
   Model,
   ModelProperty,
+  NumericLiteral,
   Scalar,
   Type,
   getEncode,
+  getFriendlyName,
   getProjectedName,
   isArrayModelType,
+  isTemplateInstance,
 } from "@typespec/compiler";
 import { parseCase } from "../util/case.js";
 import { PathCursor, RustContext } from "../ctx.js";
@@ -14,16 +17,15 @@ import { KEYWORDS } from "./keywords.js";
 import { getFullyQualifiedTypeName } from "../util/name.js";
 import { getRecordValueName, getArrayElementName } from "../util/pluralism.js";
 import { RustTranslation } from "./scalar.js";
+import { referenceVendoredHostPath } from "../util/vendored.js";
 import {
-  referenceHostPath,
-  referenceVendoredHostPath,
-} from "../util/vendored.js";
-import { emitTypeReference, isValueLiteralType } from "./reference.js";
-import { getHeaderFieldName, isHeader } from "@typespec/http";
+  RustTypeSpecLiteralType,
+  emitTypeReference,
+  isValueLiteralType,
+} from "./reference.js";
 import { emitDocumentation } from "./documentation.js";
 import { reportDiagnostic } from "../lib.js";
-
-// TODO: a lot of HTTP-isms leaked into here
+import { bifilter } from "../util/bifilter.js";
 
 export function* emitModel(
   ctx: RustContext,
@@ -31,17 +33,20 @@ export function* emitModel(
   cursor: PathCursor,
   altName?: string
 ): Iterable<string> {
-  const isTemplate = model.templateMapper !== undefined;
+  const isTemplate = isTemplateInstance(model);
+  const friendlyName = getFriendlyName(ctx.program, model);
 
   const modelNameCase = parseCase(
-    isTemplate
-      ? model.name +
+    friendlyName
+      ? friendlyName
+      : isTemplate
+        ? model.name +
           model
             .templateMapper!.args.map((a) =>
               "name" in a ? String(a.name) : ""
             )
             .join("_")
-      : model.name
+        : model.name
   );
 
   if (model.name === "" && !altName) {
@@ -50,23 +55,41 @@ export function* emitModel(
 
   const modelRecursionPoints = getModelRecursion(ctx, model);
 
-  const fieldSpecifications = [...model.properties.values()].filter(
-    (f) => !isValueLiteralType(f.type)
-  );
+  const [settings, fields] = bifilter(model.properties.values(), (f) =>
+    isValueLiteralType(f.type)
+  ) as [(ModelProperty & { type: RustTypeSpecLiteralType })[], ModelProperty[]];
 
-  const defaultMode = getDefaultMode(ctx, fieldSpecifications);
+  const defaultMode = getDefaultMode(ctx, fields);
 
-  const hasHeaderFields = fieldSpecifications.some((f) =>
-    isHeader(ctx.program, f)
-  );
-
-  const bodyLines: string[] = [];
-
-  const requiresAs = fieldSpecifications.some(
+  const requiresAs = fields.some(
     (f) => f.type.kind === "Scalar" && getEncode(ctx.program, f)
   );
 
-  const fields = fieldSpecifications.flatMap(function (field) {
+  yield* emitDocumentation(ctx, model);
+
+  const structName = model.name === "" ? altName! : modelNameCase.pascalCase;
+
+  const derives: string[] = ["Debug", "Clone", "PartialEq"];
+
+  if (defaultMode === "derive") {
+    derives.push("Default");
+  }
+
+  const deriveString = derives.join(", ");
+
+  if (requiresAs) {
+    // prettier-ignore
+    yield `#[${referenceVendoredHostPath("serde_with", "serde_as")}(crate = "${referenceVendoredHostPath("serde_with")}")]`;
+  }
+  // prettier-ignore
+  yield `#[derive(${deriveString}, ${referenceVendoredHostPath("serde", "Deserialize")}, ${referenceVendoredHostPath("serde", "Serialize")})]`;
+  yield `#[serde(crate = "${referenceVendoredHostPath("serde")}")]`;
+
+  // TODO: need some way to serialize invariable settings as required by the spec.
+
+  yield `pub struct ${structName} {`;
+
+  for (const field of fields) {
     const nameCase = parseCase(field.name);
     const basicName = nameCase.snakeCase;
 
@@ -91,168 +114,52 @@ export function* emitModel(
       ? `Option<${boxedTypeReference}>`
       : boxedTypeReference;
 
-    const projectedName =
-      getProjectedName(ctx.program, field, "json") ?? field.name;
+    const jsonName = getProjectedName(ctx.program, field, "json") ?? field.name;
 
     const name = KEYWORDS.has(basicName) ? `r#${basicName}` : basicName;
 
-    const encodingAsLines =
-      field.type.kind === "Scalar"
-        ? getEncodingAsLines(ctx, field as ModelProperty & { type: Scalar })
-        : [];
+    yield* emitDocumentation(ctx, field);
 
-    if (hasHeaderFields && !isHeader(ctx.program, field)) {
-      bodyLines.push(
-        ...emitDocumentation(ctx, field),
-        ...(basicName !== projectedName
-          ? ["#[serde(rename = " + JSON.stringify(projectedName) + ")]"]
-          : []),
-        ...(field.optional
-          ? ['#[serde(skip_serializing_if = "Option::is_none")]']
-          : []),
-        ...encodingAsLines,
-        `pub ${name}: ${fullType},`
+    if (basicName !== jsonName) {
+      yield `  #[serde(rename = ${JSON.stringify(jsonName)})]`;
+    }
+
+    if (field.optional) {
+      yield `  #[serde(skip_serializing_if = "Option::is_none")]`;
+    }
+
+    if (field.type.kind === "Scalar") {
+      yield* indent(
+        getEncodingAsLines(ctx, field as ModelProperty & { type: Scalar })
       );
     }
 
-    return [
-      ...(!hasHeaderFields
-        ? [
-            ...emitDocumentation(ctx, field),
-            ...(basicName !== projectedName
-              ? ["#[serde(rename = " + JSON.stringify(projectedName) + ")]"]
-              : []),
-            ...(field.optional
-              ? ['#[serde(skip_serializing_if = "Option::is_none")]']
-              : []),
-            ...encodingAsLines,
-          ]
-        : []),
-      `pub ${name}: ${fullType},`,
-    ];
-  });
-
-  yield* emitDocumentation(ctx, model);
-
-  const structName = model.name === "" ? altName! : modelNameCase.pascalCase;
-
-  const derives: string[] = ["Debug", "Clone", "PartialEq"];
-
-  if (defaultMode === "derive") {
-    derives.push("Default");
+    yield `  pub ${name}: ${fullType},`;
+    yield "";
   }
 
-  const deriveString = derives.join(", ");
-
-  if (hasHeaderFields) {
-    yield `#[derive(${deriveString})]`;
-  } else {
-    if (requiresAs) {
-      // prettier-ignore
-      yield `#[${referenceVendoredHostPath("serde_with", "serde_as")}(crate = "${referenceVendoredHostPath("serde_with")}")]`;
-    }
-    // prettier-ignore
-    yield `#[derive(${deriveString}, ${referenceVendoredHostPath("serde", "Deserialize")}, ${referenceVendoredHostPath("serde", "Serialize")})]`;
-    yield `#[serde(crate = "${referenceVendoredHostPath("serde")}")]`;
-  }
-
-  yield `pub struct ${structName} {`;
-  yield* indent(fields);
   yield "}";
-
-  if (hasHeaderFields) {
-    yield "";
-
-    yield "#[allow(non_camel_case_types)]";
-    if (requiresAs) {
-      // prettier-ignore
-      yield `#[${referenceVendoredHostPath("serde_with", "serde_as")}(crate = ${referenceVendoredHostPath("serde_with")})]`;
-    }
-    yield `#[derive(Debug, Clone, PartialEq, ${referenceVendoredHostPath(
-      "serde",
-      "Deserialize"
-    )}, ${referenceVendoredHostPath("serde", "Serialize")})]`;
-    yield `#[serde(crate = "${referenceVendoredHostPath("serde")}")]`;
-    yield `pub struct ${structName}__Body {`;
-    yield* indent(bodyLines);
-    yield "}";
-
-    const headerFieldSpecs = fieldSpecifications.filter((f) =>
-      isHeader(ctx.program, f)
-    );
-
-    yield "#[allow(non_camel_case_types)]";
-    yield `#[derive(Debug, Clone, PartialEq)]`;
-    yield "#[allow(non_camel_case_types)]";
-    yield `pub struct ${structName}__Headers {`;
-    for (const h of headerFieldSpecs) {
-      const basicName = parseCase(h.name).snakeCase;
-
-      const name = KEYWORDS.has(basicName) ? `r#${basicName}` : basicName;
-
-      yield `  pub ${name}: Option<String>,`;
-    }
-    yield "}";
-    yield "";
-    yield `impl ${referenceHostPath(
-      "FromHeaders"
-    )} for ${structName}__Headers {`;
-    // prettier-ignore
-    yield `  fn from_headers(headers: &${referenceVendoredHostPath("reqwest", "header", "HeaderMap")}) -> Self {`;
-    yield `    Self {`;
-    for (const h of headerFieldSpecs) {
-      const basicName = parseCase(h.name).snakeCase;
-
-      const name = KEYWORDS.has(basicName) ? `r#${basicName}` : basicName;
-
-      // prettier-ignore
-      yield `      ${name}: headers.get(${JSON.stringify(getHeaderFieldName(ctx.program, h) ?? h.name)}).map(|v| v.to_str().unwrap().to_string()),`;
-    }
-    yield "    }";
-    yield "  }";
-    yield "}";
-
-    // prettier-ignore
-    yield `impl ${referenceHostPath("FromResponseParts")} for ${structName} {`;
-    yield `  type Body = ${structName}__Body;`;
-    yield `  type Headers = ${structName}__Headers;`;
-    yield "";
-    // prettier-ignore
-    yield `  fn from_response_parts(body: Self::Body, headers: Self::Headers) -> Self {`;
-    yield "    Self {";
-
-    for (const field of fieldSpecifications) {
-      const nameCase = parseCase(field.name);
-      const basicName = nameCase.snakeCase;
-
-      if (isValueLiteralType(field.type)) continue;
-
-      const name = KEYWORDS.has(basicName) ? `r#${basicName}` : basicName;
-
-      if (isHeader(ctx.program, field)) {
-        const headerName = (
-          getHeaderFieldName(ctx.program, field) ?? nameCase.kebabCase
-        ).toLowerCase();
-
-        // prettier-ignore
-        const baseExpr = `headers.${name}`;
-
-        const isOptional = field.optional;
-
-        const expr = isOptional ? baseExpr : `${baseExpr}.unwrap()`;
-
-        yield `      ${name}: ${expr},`;
-      } else {
-        yield `      ${name}: body.${name},`;
-      }
-    }
-
-    yield "    }";
-    yield "  }";
-    yield "}";
-  }
-
   yield "";
+
+  // Add an impl for const settings if necessary.
+  if (settings.length > 0) {
+    yield `impl ${structName} {`;
+
+    for (const setting of settings) {
+      const nameCase = parseCase(setting.name);
+      const settingName = nameCase.upper.snakeCase;
+
+      const [settingTypeReference, settingValue] = getRustLiteralTypeAndValue(
+        setting.type
+      );
+
+      yield "  #[allow(dead_code)]";
+      yield `  pub const ${settingName}: ${settingTypeReference} = ${settingValue};`;
+    }
+
+    yield "}";
+    yield "";
+  }
 }
 
 export function isWellKnownModel(ctx: RustContext, type: Model): boolean {
@@ -430,6 +337,8 @@ function getEncodingAsLines(
     ];
   }
 
+  // TODO: many more required encodings
+
   reportDiagnostic(ctx.program, {
     code: "unrecognized-encoding",
     format: {
@@ -440,4 +349,41 @@ function getEncodingAsLines(
   });
 
   return [];
+}
+
+export function getRustLiteralTypeAndValue(
+  type: RustTypeSpecLiteralType
+): [string, string] {
+  switch (type.kind) {
+    case "Boolean":
+      return ["bool", String(type.value)];
+    case "Number":
+      return getNumericLiteralTypeAndValue(type);
+    case "String":
+      return ["&'static str", JSON.stringify(type.value)];
+    case "Intrinsic":
+      return ["()", "()"];
+    default:
+      throw new Error(`UNREACHABLE: ${(type satisfies never as any).kind}`);
+  }
+}
+
+const INT32_MAX = 2 ** 31 - 1;
+const INT32_MIN = -(2 ** 31);
+
+function getNumericLiteralTypeAndValue(type: NumericLiteral): [string, string] {
+  // We'll do this pretty simply and use 32 or 64 bit int depending on the size if the underlying value is an int.
+  // Otherwise, we'll use f64.
+
+  const value = String(type.value);
+
+  if (Number.isInteger(type.value)) {
+    if (type.value > INT32_MAX || type.value < INT32_MIN) {
+      return ["i64", value];
+    } else {
+      return ["i32", value];
+    }
+  } else {
+    return ["f64", value];
+  }
 }

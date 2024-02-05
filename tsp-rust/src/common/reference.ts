@@ -6,6 +6,12 @@ import {
   IntrinsicType,
   Namespace,
   UnionVariant,
+  StringLiteral,
+  NumericLiteral,
+  BooleanLiteral,
+  ObjectType,
+  LiteralType,
+  Union,
 } from "@typespec/compiler";
 import { PathCursor, RustContext } from "../ctx.js";
 import { RustTranslation, getRustScalar } from "./scalar.js";
@@ -42,7 +48,10 @@ export function emitTypeReference(
 
       if (effectiveModel.name === "") {
         if (ctx.syntheticNames.has(effectiveModel)) {
-          return ctx.syntheticNames.get(effectiveModel)!;
+          return cursor.pathTo(
+            ctx.syntheticModule.cursor,
+            ctx.syntheticNames.get(effectiveModel)!
+          );
         }
 
         // Anonymous model, synthesize a new model with the preferredName
@@ -52,13 +61,12 @@ export function emitTypeReference(
           underlying: effectiveModel,
         });
 
-        const name = cursor.resolveAbsolutePathOld(
-          "models",
-          "synthetic",
+        const name = cursor.pathTo(
+          ctx.syntheticModule.cursor,
           preferredAlternativeName
         );
 
-        ctx.syntheticNames.set(effectiveModel, name);
+        ctx.syntheticNames.set(effectiveModel, preferredAlternativeName);
 
         return name;
       } else {
@@ -92,7 +100,10 @@ export function emitTypeReference(
     case "Union": {
       if (type.name === "" || type.name === undefined) {
         if (ctx.syntheticNames.has(type)) {
-          return ctx.syntheticNames.get(type)!;
+          return cursor.pathTo(
+            ctx.syntheticModule.cursor,
+            ctx.syntheticNames.get(type)!
+          );
         }
 
         ctx.synthetics.push({
@@ -101,13 +112,12 @@ export function emitTypeReference(
           underlying: type,
         });
 
-        const name = cursor.resolveAbsolutePathOld(
-          "models",
-          "synthetic",
+        const name = cursor.pathTo(
+          ctx.syntheticModule.cursor,
           preferredAlternativeName
         );
 
-        ctx.syntheticNames.set(type, name);
+        ctx.syntheticNames.set(type, preferredAlternativeName);
 
         return name;
       } else {
@@ -124,7 +134,7 @@ export function emitTypeReference(
     case "Number":
     case "String":
     case "Boolean":
-      return `compile_error!("encountered '${type.kind}' literal in model graph")`;
+      return `compile_error!("encountered '${type.kind}' literal in type graph")`;
     case "Intrinsic":
       switch (type.name) {
         case "never":
@@ -134,26 +144,59 @@ export function emitTypeReference(
           // TODO: is this correct?
           return "()";
         case "ErrorType":
-          return `compile_error!("encountered 'ErrorType' in model graph")`;
+          return `compile_error!("encountered 'ErrorType' in type graph")`;
         case "unknown":
           // TODO: assumes JSON
           return referenceVendoredHostPath("serde_json", "Value");
         default:
           return `compile_error!("encountered unknown intrinsic type '${
             (type satisfies never as IntrinsicType).name
-          }' in model graph")`;
+          }' in type graph")`;
       }
+    case "Interface": {
+      if (type.namespace === undefined) {
+        throw new Error("Unreachable: unparented interface");
+      }
+
+      const typeName = parseCase(type.name).pascalCase;
+
+      ctx.typeQueue.add(type);
+
+      const parentModule = createOrGetModuleForNamespace(ctx, type.namespace);
+
+      return cursor.pathTo(parentModule.cursor, typeName);
+    }
     default:
       throw new Error(`UNREACHABLE: ${type.kind}`);
   }
 }
 
+const __SYNTHETIC_UNIONS = new Map<Union, Map<string, PathCursor>>();
+
+function getSyntheticUnionStore(union: Union): Map<string, PathCursor> {
+  let store = __SYNTHETIC_UNIONS.get(union);
+
+  if (!store) {
+    store = new Map();
+    __SYNTHETIC_UNIONS.set(union, store);
+  }
+
+  return store;
+}
+
 export function emitSyntheticUnionReference(
   ctx: RustContext,
+  canonical: Union,
   variants: UnionVariant[],
   cursor: PathCursor,
   preferredAlternativeName: string
 ): string {
+  const store = getSyntheticUnionStore(canonical);
+
+  if (store.has(preferredAlternativeName)) {
+    return cursor.pathTo(store.get(preferredAlternativeName)!);
+  }
+
   const targetCursor = ctx.rootModule.cursor.enter("models", "synthetic");
   const absolutePath = targetCursor
     .enter(preferredAlternativeName)
@@ -173,15 +216,20 @@ export function emitSyntheticUnionReference(
 
   ctx.syntheticUnions.add(absolutePath);
 
+  store.set(preferredAlternativeName, targetCursor);
+
   return reference;
 }
 
-export function isValueLiteralType(t: Type): boolean {
+export type RustTypeSpecLiteralType =
+  | LiteralType
+  | (IntrinsicType & { name: "null" });
+
+export function isValueLiteralType(t: Type): t is RustTypeSpecLiteralType {
   switch (t.kind) {
     case "String":
     case "Number":
     case "Boolean":
-    case "Object":
       return true;
     case "Intrinsic":
       return t.name === "null";

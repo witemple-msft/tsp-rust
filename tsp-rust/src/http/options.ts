@@ -12,6 +12,8 @@ import {
   referenceVendoredHostPath,
 } from "../util/vendored.js";
 
+// TODO: whole module is dead code
+
 export function* emitOptions(ctx: RustContext): Iterable<string> {
   if (ctx.options.length === 0) {
     return;

@@ -18,6 +18,8 @@ import {
 } from "../util/vendored.js";
 import { KEYWORDS } from "../common/keywords.js";
 
+// TODO: whole module is dead code
+
 export interface ResultInfo {
   readonly returnType: string;
   readonly result: string[];

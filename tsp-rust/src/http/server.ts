@@ -6,6 +6,8 @@ import { emitTypeReference } from "../common/reference.js";
 import { referenceVendoredHostPath } from "../util/vendored.js";
 import { AuthCode } from "./auth.js";
 
+// TODO: whole module is dead code
+
 export interface ServerDescription {
   ctxLines: string[];
 }

@@ -16,6 +16,8 @@ import { referenceVendoredHostPath } from "../util/vendored.js";
 import { emitTypeReference, isValueLiteralType } from "../common/reference.js";
 import { AuthCode } from "./auth.js";
 
+// TODO: whole module is dead code
+
 export function* emitHttpOperations(
   ctx: RustContext,
   auth: AuthCode,

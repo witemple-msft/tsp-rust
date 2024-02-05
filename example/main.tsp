@@ -30,8 +30,20 @@ model Error {
  */
 @route("/freestanding")
 @get
-op freestanding(): {
+op freestanding(@header("X-Foo") foo: string): {
     @statusCode code: 200;
+    @header("X-Bar") bar: string;
+    @body example: bytes;
+} | Error;
+
+/**
+ * A freestanding operation with a path parameter and query parameter.
+ */
+@route("/freestanding/{id}")
+@post
+op freestandingPath(@path id: string, @query q: string): {
+    @statusCode code: 200;
+    @header("X-Composite") composite: string;
     @body example: bytes;
 } | Error;
 
@@ -49,6 +61,8 @@ model Foo {
      * A number field.
      */
     b: uint32;
+
+    setting: "this is a setting";
 }
 
 /**
@@ -76,18 +90,18 @@ model Output {
  */
 @route("/operations")
 interface Operations {
-    /**
-     * A POST operation that uses multipart/form-data.
-     *
-     * @param data The data.
-     *
-     * @returns nothing.
-     */
-    @route("/mpfd")
-    @post
-    mpfd(@header `content-type`: "multipart/form-data", data: bytes): {
-        @statusCode code: 200;
-    };
+    // /**
+    //  * A POST operation that uses multipart/form-data.
+    //  *
+    //  * @param data The data.
+    //  *
+    //  * @returns nothing.
+    //  */
+    // @route("/mpfd")
+    // @post
+    // mpfd(@header `content-type`: "multipart/form-data", data: bytes): {
+    //     @statusCode code: 200;
+    // };
 
     /**
      * A POST operation that uses application/json.

@@ -4,6 +4,9 @@ version = "0.1.0"
 edition = "2021"
 default-run = "test-client"
 
+[lints]
+workspace = true
+
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
@@ -14,3 +17,7 @@ hyper-util = { version = "0.1", features = ["full"] }
 http-body-util = "0.1"
 
 actix-web = "4"
+warp = "0.3"
+matchit = "0.7"
+anyhow = "1"
+url = "2"

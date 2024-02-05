@@ -57,6 +57,7 @@ export function emitRust(ctx: EmitContext, service: HttpService): string {
     baseNamespace: service.namespace,
     namespaceModules: new Map(),
     syntheticUnions: new Set(),
+    syntheticModule: undefined as any,
   };
 
   const auth = generateAuth(rustCtx);
