@@ -18,6 +18,7 @@ interface Pets {
   list(): Pet[];
   create(@body pet: Pet): Pet;
   update(@path("id") id: string, @body pet: Pet): Pet;
+  @delete
   delete(@path("id") id: string): void;
 }
 

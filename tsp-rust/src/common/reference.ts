@@ -12,6 +12,7 @@ import {
   ObjectType,
   LiteralType,
   Union,
+  isArrayModelType,
 } from "@typespec/compiler";
 import { PathCursor, RustContext } from "../ctx.js";
 import { RustTranslation, getRustScalar } from "./scalar.js";
@@ -19,6 +20,7 @@ import { referenceVendoredHostPath } from "../util/vendored.js";
 import { emitWellKnownModel, isWellKnownModel } from "./model.js";
 import { parseCase } from "../util/case.js";
 import { createOrGetModuleForNamespace } from "./namespace.js";
+import { getArrayElementName } from "../util/pluralism.js";
 
 export type NamespacedType = Extract<Type, { namespace?: Namespace }>;
 
@@ -34,6 +36,29 @@ export function emitTypeReference(
     case "Scalar":
       return getRustScalar(ctx.program, type, position)[disposition];
     case "Model": {
+      if (isArrayModelType(ctx.program, type)) {
+        const argTypeReference = emitTypeReference(
+          ctx,
+          type.templateMapper!.args[0],
+          position,
+          disposition,
+          cursor,
+          getArrayElementName(preferredAlternativeName)
+        );
+        switch (disposition) {
+          case "owned":
+            return `Vec<${argTypeReference}>`;
+          case "borrowed":
+            return `&[${argTypeReference}]`;
+          case "param":
+            return `&[${argTypeReference}]`;
+          case "paramTemplate":
+            throw new Error(
+              "Unreachable; asked for paramTemplate in emitReference"
+            );
+        }
+      }
+
       if (isWellKnownModel(ctx, type)) {
         return emitWellKnownModel(
           ctx,

@@ -1,6 +1,6 @@
 [workspace]
 resolver = "2"
-members = ["tsp_rust", "test-client"]
+members = ["tsp_rust", "test-client", "petstore"]
 
 [workspace.lints.clippy]
 disallowed_names = "allow"

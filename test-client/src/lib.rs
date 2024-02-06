@@ -1,6 +1,7 @@
 #![feature(impl_trait_in_assoc_type)]
 
 pub mod example;
+mod test;
 
 pub mod server {
     use std::{convert::Infallible, future::Future, task::Poll};

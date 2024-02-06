@@ -38,7 +38,9 @@ pub mod http {
     use futures::Stream;
     use http_body::Frame;
     use http_body_util::StreamBody;
-    use serde::Deserialize;
+    use serde::{Deserialize, Serialize};
+
+    use crate::serialize;
 
     pub mod vendored {
         pub use bytes;
@@ -63,6 +65,7 @@ pub mod http {
     pub type Body =
         StreamBody<Pin<Box<dyn Stream<Item = Result<Frame<Bytes>, Infallible>> + Send + Sync>>>;
 
+    #[derive(Debug)]
     pub enum Error<Body: http_body::Body, ServiceError, OperationError> {
         Serialize(serde_json::Error),
         Deserialize(serde_json::Error),
@@ -187,6 +190,36 @@ pub mod http {
                 Ok(t) => t.to_response(),
                 Err(e) => e.to_response(),
             }
+        }
+    }
+
+    impl FromParts for () {
+        fn from_parts(_: http::response::Parts) -> Self {
+            #[allow(clippy::unused_unit)]
+            ()
+        }
+    }
+
+    impl Responder for () {
+        fn to_response<B: http_body::Body, E: std::error::Error>(
+            self,
+        ) -> Result<http::Response<Body>, ServerError<B, E>> {
+            Ok(http::Response::builder()
+                .status(http::StatusCode::NO_CONTENT)
+                .body(Body::new(Box::pin(futures::stream::empty())))
+                .unwrap())
+        }
+    }
+
+    impl<T: Serialize> Responder for Vec<T> {
+        fn to_response<B: http_body::Body, E: std::error::Error>(
+            self,
+        ) -> Result<http::Response<Body>, ServerError<B, E>> {
+            Ok(http::Response::builder()
+                .status(http::StatusCode::OK)
+                .header(http::header::CONTENT_TYPE, "application/json")
+                .body(serialize_json_body(self).map_err(ServerError::Serialize)?)
+                .unwrap())
         }
     }
 }

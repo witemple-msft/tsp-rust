@@ -1,4 +1,9 @@
-import { JSONSchemaType, Type, isErrorModel } from "@typespec/compiler";
+import {
+  JSONSchemaType,
+  Type,
+  isArrayModelType,
+  isErrorModel,
+} from "@typespec/compiler";
 import {
   Module,
   PathCursor,
@@ -60,17 +65,17 @@ type HttpTrait = (typeof HttpTraits)[number];
 interface TraitArgs {
   FromParts: [];
   FromResponse: [body: Type];
-  Responder: [];
+  Responder: [isBody: boolean];
 }
 
 const impls = new Map<HttpTrait, Set<Type | string>>(
   HttpTraits.map((trait) => [trait, new Set()])
 );
 
-interface Impl {
-  trait: HttpTrait;
+interface Impl<T extends HttpTrait = HttpTrait> {
+  trait: T;
   for: Type | [PathCursor, string];
-  args: Type[];
+  args: TraitArgs[T];
 }
 
 function impl<T extends HttpTrait>(
@@ -682,10 +687,14 @@ function* emitImpl(ctx: HttpContext, impl: Impl): Iterable<string> {
   switch (impl.trait) {
     case "FromParts":
     case "FromResponse":
-      yield* emitFromResponseOrHeaderImpl(ctx, impl, cursor);
+      yield* emitFromResponseOrHeaderImpl(
+        ctx,
+        impl as Impl<"FromResponse" | "FromParts">,
+        cursor
+      );
       break;
     case "Responder":
-      yield* emitResponderImpl(ctx, impl, cursor);
+      yield* emitResponderImpl(ctx, impl as Impl<"Responder">, cursor);
       break;
     default:
       throw new Error(`Unreachable: ${impl.trait satisfies never}`);
@@ -694,9 +703,9 @@ function* emitImpl(ctx: HttpContext, impl: Impl): Iterable<string> {
 
 function* emitFromResponseOrHeaderImpl(
   ctx: HttpContext,
-  impl: Impl,
+  impl: Impl<"FromParts" | "FromResponse">,
   cursor: PathCursor
-) {
+): Iterable<string> {
   const typeReference = Array.isArray(impl.for)
     ? cursor.pathTo(...impl.for)
     : emitTypeReference(
@@ -707,6 +716,13 @@ function* emitFromResponseOrHeaderImpl(
         cursor,
         "**unreachable**"
       );
+
+  if (Array.isArray(impl.for)) {
+    // TODO: need to be able to reconstruct the variants from impl.for
+    throw new UnimplementedError("Composite response reconstruction.");
+  }
+
+  if (impl.for.kind === "Intrinsic") return [];
 
   const trait = referenceHostPath("http", impl.trait);
 
@@ -733,11 +749,6 @@ function* emitFromResponseOrHeaderImpl(
     default: {
       throw new Error(`UNREACHABLE: HTTP trait ${impl.trait}`);
     }
-  }
-
-  if (Array.isArray(impl.for)) {
-    // TODO: need to be able to reconstruct the variants from impl.for
-    throw new UnimplementedError("Composite response reconstruction.");
   }
 
   yield* indent(indent(emitConstructor(ctx, impl.for, cursor)));
@@ -799,6 +810,19 @@ function* emitConstructor(
       yield "}";
       break;
     }
+    case "Intrinsic":
+      switch (type.name) {
+        case "void": {
+          yield "()";
+          break;
+        }
+        default: {
+          throw new UnimplementedError(
+            `response constructor for intrinsic type '${type.name}'`
+          );
+        }
+      }
+      break;
     default:
       throw new UnimplementedError(
         `response constructor for type kind '${type.kind}'`
@@ -808,9 +832,11 @@ function* emitConstructor(
 
 function* emitResponderImpl(
   ctx: HttpContext,
-  impl: Impl,
+  impl: Impl<"Responder">,
   cursor: PathCursor
 ): Iterable<string> {
+  const typeIsBody = impl.args[0];
+
   const typeReference = Array.isArray(impl.for)
     ? cursor.pathTo(...impl.for)
     : emitTypeReference(
@@ -827,6 +853,11 @@ function* emitResponderImpl(
     throw new UnimplementedError("Composite response output.");
   }
 
+  if (impl.for.kind === "Intrinsic") return [];
+
+  if (impl.for.kind === "Model" && isArrayModelType(ctx.program, impl.for))
+    return [];
+
   yield `impl ${referenceHostPath("http", "Responder")} for ${typeReference} {`;
   yield `  fn to_response<B: ${referenceVendoredHostPath(
     "http_body",
@@ -841,6 +872,32 @@ function* emitResponderImpl(
 
   switch (impl.for.kind) {
     case "Model": {
+      if (typeIsBody) {
+        // prettier-ignore
+        yield `    let response = ${referenceVendoredHostPath("http", "Response")}::builder()`;
+        yield `      .status(200u16)`;
+        yield `      .header("content-type", "application/json")`;
+        yield `      .body(`;
+        yield `        ${referenceHostPath(
+          "http",
+          "serialize_json_body"
+        )}(&self)`;
+        yield `                .map_err(${referenceHostPath(
+          "http",
+          "ServerError",
+          "Serialize"
+        )})?`;
+        yield `      )`;
+        yield `      .unwrap();`;
+        yield "";
+
+        yield "    Ok(response)";
+        yield "  }";
+        yield "}";
+
+        return;
+      }
+
       // prettier-ignore
       yield `    let response = ${referenceVendoredHostPath("http", "Response")}::builder()`;
 
@@ -944,7 +1001,6 @@ function* emitResponderImpl(
     case "Tuple":
     case "Union":
     case "UnionVariant":
-    case "Intrinsic":
     case "Function":
     case "Decorator":
     case "FunctionParameter":
@@ -1230,14 +1286,17 @@ function* emitRawServerOperation(
 
   function implResponderAll(split: SplitReturnType) {
     if (split.target) {
-      impl(ctx, "Responder", split.target);
+      const isBodyType =
+        !Array.isArray(split.target) && responsesHaveBodyType(split.target);
+      impl(ctx, "Responder", split.target, isBodyType);
     }
     switch (split.kind) {
       case "ordinary":
         break;
       case "union":
         for (const variant of split.variants) {
-          impl(ctx, "Responder", variant.type);
+          const isBodyType = responsesHaveBodyType(variant.type);
+          impl(ctx, "Responder", variant.type, isBodyType);
         }
         break;
       default:
@@ -1247,6 +1306,12 @@ function* emitRawServerOperation(
           }'`
         );
     }
+  }
+
+  function responsesHaveBodyType(t: Type): boolean {
+    return operation.responses.some((resp) =>
+      resp.responses.some((r) => r.body?.type === t)
+    );
   }
 }
 
