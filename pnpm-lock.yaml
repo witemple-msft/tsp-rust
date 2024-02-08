@@ -6,38 +6,20 @@ settings:
 
 importers:
 
-  example:
-    dependencies:
-      '@typespec/compiler':
-        specifier: latest
-        version: 0.52.0
-      '@typespec/http':
-        specifier: latest
-        version: 0.52.1(@typespec/compiler@0.52.0)
-      '@typespec/openapi3':
-        specifier: latest
-        version: 0.52.0(@typespec/compiler@0.52.0)(@typespec/http@0.52.1)(@typespec/openapi@0.52.0)(@typespec/versioning@0.52.0)
-      '@typespec/rest':
-        specifier: latest
-        version: 0.52.0(@typespec/compiler@0.52.0)(@typespec/http@0.52.1)
-      tsp-rust:
-        specifier: ../tsp-rust
-        version: link:../tsp-rust
-
   petstore:
     dependencies:
       '@typespec/compiler':
         specifier: latest
-        version: 0.52.0
+        version: 0.53.0
       '@typespec/http':
         specifier: latest
-        version: 0.52.1(@typespec/compiler@0.52.0)
+        version: 0.53.0(@typespec/compiler@0.53.0)
       '@typespec/openapi3':
         specifier: latest
-        version: 0.52.0(@typespec/compiler@0.52.0)(@typespec/http@0.52.1)(@typespec/openapi@0.52.0)(@typespec/versioning@0.52.0)
+        version: 0.53.0(@typespec/compiler@0.53.0)(@typespec/http@0.53.0)(@typespec/openapi@0.53.0)(@typespec/versioning@0.53.0)
       '@typespec/rest':
         specifier: latest
-        version: 0.52.0(@typespec/compiler@0.52.0)(@typespec/http@0.52.1)
+        version: 0.53.0(@typespec/compiler@0.53.0)(@typespec/http@0.53.0)
       tsp-rust:
         specifier: ../tsp-rust
         version: link:../tsp-rust
@@ -46,10 +28,10 @@ importers:
     dependencies:
       '@typespec/compiler':
         specifier: latest
-        version: 0.52.0
+        version: 0.53.0
       '@typespec/http':
         specifier: latest
-        version: 0.52.1(@typespec/compiler@0.52.0)
+        version: 0.53.0(@typespec/compiler@0.53.0)
       source-map-support:
         specifier: ^0.5.21
         version: 0.5.21
@@ -117,8 +99,8 @@ packages:
       undici-types: 5.26.5
     dev: true
 
-  /@typespec/compiler@0.52.0:
-    resolution: {integrity: sha512-36cZ5RWxRjL4SUe41KjPh3j3RQibpUoOzHcSllQJ3ByTSZdXv1zckMHLiRfaAbTXUADSAn2GMs4ZO3s8GdOGIQ==}
+  /@typespec/compiler@0.53.0:
+    resolution: {integrity: sha512-07zb6mXwMX7ps7q+ubwBNb8Vz4ewmqrymAwnWZcl40r2VMsyZIQZM9ZPao87imCA+fWiPOKblIzRB7OVq3XOPg==}
     engines: {node: '>=18.0.0'}
     hasBin: true
     dependencies:
@@ -137,60 +119,60 @@ packages:
       yargs: 17.7.2
     dev: false
 
-  /@typespec/http@0.52.1(@typespec/compiler@0.52.0):
-    resolution: {integrity: sha512-2i7t6eSKi96F/zt1w0yJvhRhubYej0F9o8jDRhPA+TZI6SAxcv/Vyi+lkKnkOcu90HPH7b8T+YNizudb00BO6A==}
+  /@typespec/http@0.53.0(@typespec/compiler@0.53.0):
+    resolution: {integrity: sha512-Hdwbxr6KgzmJdULbbcwWaSSrWlduuMuEVUVdlytxyo9K+aoUCcPl0thR5Ez2VRh02/IJl3xG4n5wXgOwWb3amA==}
     engines: {node: '>=18.0.0'}
     peerDependencies:
-      '@typespec/compiler': ~0.52.0
+      '@typespec/compiler': ~0.53.0
     dependencies:
-      '@typespec/compiler': 0.52.0
+      '@typespec/compiler': 0.53.0
     dev: false
 
-  /@typespec/openapi3@0.52.0(@typespec/compiler@0.52.0)(@typespec/http@0.52.1)(@typespec/openapi@0.52.0)(@typespec/versioning@0.52.0):
-    resolution: {integrity: sha512-PPhNdpKQD2iHJemOaRUhnaeFWa4ApW4HtcZI+jrg4hyNSIwDYxL0OwwRohKjRUKM98iacpXvEh+5rKtkPiY2Qw==}
+  /@typespec/openapi3@0.53.0(@typespec/compiler@0.53.0)(@typespec/http@0.53.0)(@typespec/openapi@0.53.0)(@typespec/versioning@0.53.0):
+    resolution: {integrity: sha512-wcgwYJP/UPwuYlJbCSbhI3+G+RnZaaj5xwUEDD2QPkIhIiwhETyuXaN0ZFTSQWUTmypXt/e21KPUwHO03RpIdA==}
     engines: {node: '>=18.0.0'}
     peerDependencies:
-      '@typespec/compiler': ~0.52.0
-      '@typespec/http': ~0.52.0
-      '@typespec/openapi': ~0.52.0
-      '@typespec/versioning': ~0.52.0
+      '@typespec/compiler': ~0.53.0
+      '@typespec/http': ~0.53.0
+      '@typespec/openapi': ~0.53.0
+      '@typespec/versioning': ~0.53.0
     dependencies:
-      '@typespec/compiler': 0.52.0
-      '@typespec/http': 0.52.1(@typespec/compiler@0.52.0)
-      '@typespec/openapi': 0.52.0(@typespec/compiler@0.52.0)(@typespec/http@0.52.1)
-      '@typespec/versioning': 0.52.0(@typespec/compiler@0.52.0)
+      '@typespec/compiler': 0.53.0
+      '@typespec/http': 0.53.0(@typespec/compiler@0.53.0)
+      '@typespec/openapi': 0.53.0(@typespec/compiler@0.53.0)(@typespec/http@0.53.0)
+      '@typespec/versioning': 0.53.0(@typespec/compiler@0.53.0)
       yaml: 2.3.4
     dev: false
 
-  /@typespec/openapi@0.52.0(@typespec/compiler@0.52.0)(@typespec/http@0.52.1):
-    resolution: {integrity: sha512-2Otnu9glehxvp6TU7NOHEniBDDKufV03XTmeVGgGEmu/j+cveAMg8lA1/O0RBpS2oHGsCFnMEuPcR8M1c0LI+Q==}
+  /@typespec/openapi@0.53.0(@typespec/compiler@0.53.0)(@typespec/http@0.53.0):
+    resolution: {integrity: sha512-FRHb6Wi4Yf1HGm3EnhhXZ0Bw+EIPam6ptxRy7NDRxyMnzHsOphGcv8mDIZk6MPSy8xPasbFNwaRC1TXpxVhQBw==}
     engines: {node: '>=18.0.0'}
     peerDependencies:
-      '@typespec/compiler': ~0.52.0
-      '@typespec/http': ~0.52.0
+      '@typespec/compiler': ~0.53.0
+      '@typespec/http': ~0.53.0
     dependencies:
-      '@typespec/compiler': 0.52.0
-      '@typespec/http': 0.52.1(@typespec/compiler@0.52.0)
+      '@typespec/compiler': 0.53.0
+      '@typespec/http': 0.53.0(@typespec/compiler@0.53.0)
     dev: false
 
-  /@typespec/rest@0.52.0(@typespec/compiler@0.52.0)(@typespec/http@0.52.1):
-    resolution: {integrity: sha512-dLsY0fS60IVaAt4eCRcvEqorX/miPVV33du3dETTYYmbHtfEbvBKgTj/m6OH4noey7oaihlvLz5kYyLv8Am7zA==}
+  /@typespec/rest@0.53.0(@typespec/compiler@0.53.0)(@typespec/http@0.53.0):
+    resolution: {integrity: sha512-aA75Ol2pRvUjtRqQvFHmFG52pkeif3m+tboLAT00AekTxOPZ3rqQmlE12ne4QF8KjgHA6denqH4f/XyDoRJOJQ==}
     engines: {node: '>=18.0.0'}
     peerDependencies:
-      '@typespec/compiler': ~0.52.0
-      '@typespec/http': ~0.52.0
+      '@typespec/compiler': ~0.53.0
+      '@typespec/http': ~0.53.0
     dependencies:
-      '@typespec/compiler': 0.52.0
-      '@typespec/http': 0.52.1(@typespec/compiler@0.52.0)
+      '@typespec/compiler': 0.53.0
+      '@typespec/http': 0.53.0(@typespec/compiler@0.53.0)
     dev: false
 
-  /@typespec/versioning@0.52.0(@typespec/compiler@0.52.0):
-    resolution: {integrity: sha512-Vr4WHaZiDOxJqRp8/u6X0R45E+rFKEprYmSZX0o5bzetj0cVjOIEbQZvDJCif1Uz0S3K0KKfqf/kYmdYWMJ7Dw==}
+  /@typespec/versioning@0.53.0(@typespec/compiler@0.53.0):
+    resolution: {integrity: sha512-nrrLXCWPDrrClAfpCMzQ3YPTbKQmjPC3LSeMjq+wPiMq+1PW95ulOGD4QiCBop+4wKhMCJHnqqSzVauT1LjdvQ==}
     engines: {node: '>=18.0.0'}
     peerDependencies:
-      '@typespec/compiler': ~0.52.0
+      '@typespec/compiler': ~0.53.0
     dependencies:
-      '@typespec/compiler': 0.52.0
+      '@typespec/compiler': 0.53.0
     dev: false
 
   /ajv@8.12.0:
