@@ -32,6 +32,10 @@ export function* emitUnion(
     (v) => typeof v.name === "string" && v.name
   );
 
+  const allVariantsAreString = [...union.variants.values()].every(
+    (v) => v.type.kind === "String"
+  );
+
   const discriminator = isPartialSynthetic
     ? undefined
     : getDiscriminator(ctx.program, union)?.propertyName;
@@ -44,7 +48,7 @@ export function* emitUnion(
 
   if (allVariantsAreNamed && discriminator) {
     yield `#[serde(tag = "${discriminator}")]`;
-  } else {
+  } else if (!allVariantsAreString) {
     yield `#[serde(untagged)]`;
   }
 
