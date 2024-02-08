@@ -40,8 +40,6 @@ pub mod http {
     use http_body_util::StreamBody;
     use serde::{Deserialize, Serialize};
 
-    use crate::serialize;
-
     pub mod vendored {
         pub use bytes;
         pub use eyes;
@@ -194,8 +192,8 @@ pub mod http {
     }
 
     impl FromParts for () {
+        #[allow(clippy::unused_unit)]
         fn from_parts(_: http::response::Parts) -> Self {
-            #[allow(clippy::unused_unit)]
             ()
         }
     }

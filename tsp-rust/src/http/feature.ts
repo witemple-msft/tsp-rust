@@ -41,6 +41,7 @@ import { indent } from "../util/indent.js";
 import { getRustScalar } from "../common/scalar.js";
 import { createOrGetModuleForNamespace } from "../common/namespace.js";
 import { getRustLiteralTypeAndValue } from "../common/model.js";
+import { emitRouter } from "./router.js";
 
 declare global {
   interface RustEmitterFeature {
@@ -158,6 +159,7 @@ async function emitHttp(ctx: RustContext, options: RustEmitterFeature["http"]) {
 
   emitRawClient(httpContext, httpService, operationsModule);
   emitRawServer(httpContext, httpService, operationsModule);
+  emitRouter(httpContext, httpService);
 
   const implsModule: Module = {
     name: "_impls",
@@ -533,6 +535,10 @@ function* emitResponseCases(
 
   for (const response of responses) {
     const statusPattern = getStatusCodePattern(response.statusCodes);
+
+    if (response.type.kind === "Intrinsic" && response.type.name === "void") {
+      yield `#[allow(clippy::unit_arg)]`;
+    }
 
     yield `${statusPattern} => {`;
 
@@ -1079,19 +1085,39 @@ function* emitRawServerOperation(
 
   completePendingDeclarations(ctx);
 
+  const pathParameters = operation.parameters.parameters.filter(
+    function isPathParameter(param) {
+      return param.type === "path";
+    }
+  ) as Extract<HttpOperationParameter, { type: "path" }>[];
+
   yield `pub async fn ${operationNameCase.snakeCase}<`;
-  yield `  E: ${operationTrait},`;
+  yield `  Operations: ${operationTrait},`;
   // prettier-ignore
   yield `  RequestBody: ${referenceVendoredHostPath("http_body", "Body")} + Send + Sync,`
   yield ">(";
-  yield `  mut service: E,`;
+  yield `  mut operations: Operations,`;
   // prettier-ignore
   yield `  request: ${referenceVendoredHostPath("http", "Request")}<RequestBody>,`;
+
+  for (const pathParam of pathParameters) {
+    const typeReference = emitTypeReference(
+      ctx,
+      pathParam.param.type,
+      pathParam.param,
+      "borrowed",
+      cursor,
+      "**unreachable**"
+    );
+
+    yield `  ${parseCase(pathParam.param.name).snakeCase}: ${typeReference},`;
+  }
+
   yield ") -> Result<";
   // prettier-ignore
   yield `  ${referenceVendoredHostPath("http", "Response")}<${referenceHostPath("http", "Body")}>,`;
   // prettier-ignore
-  yield `  ${referenceHostPath("http", "ServerError")}<RequestBody, E::Error<${errorType.typeReference}>>`;
+  yield `  ${referenceHostPath("http", "ServerError")}<RequestBody, Operations::Error<${errorType.typeReference}>>`;
   yield "> {";
 
   yield "  #[allow(unused_variables)]";
@@ -1130,7 +1156,7 @@ function* emitRawServerOperation(
         queryParams.push(parameter);
         break;
       case "path":
-        pathParams.push(parameter);
+        // Already handled above.
         break;
       default:
         throw new Error(
@@ -1263,7 +1289,16 @@ function* emitRawServerOperation(
 
   // TODO: map_err is wrong here, and prevents us from running the error variants' Responder impls
 
-  yield `  let result = service`;
+  if (
+    successType.target &&
+    !Array.isArray(successType.target) &&
+    successType.target.kind === "Intrinsic" &&
+    successType.target.name === "void"
+  ) {
+    yield `  #[allow(clippy::let_unit_value)]`;
+  }
+
+  yield `  let result = operations`;
   // prettier-ignore
   yield `    .${operationNameCase.snakeCase}(${parameters.map((p) => parseCase(p.name).snakeCase)})`;
   yield "    .await";

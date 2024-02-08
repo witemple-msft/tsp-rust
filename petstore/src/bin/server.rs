@@ -2,7 +2,7 @@
 
 use hyper::server::conn::http1;
 use hyper_util::rt::TokioIo;
-use petstore::{router::PetStoreRouter, Pet};
+use petstore::{http::router::PetStoreRouter, Pet};
 use std::{collections::HashMap, net::SocketAddr, sync::Arc};
 use tokio::{net::TcpListener, sync::Mutex};
 
